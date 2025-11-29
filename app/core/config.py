@@ -16,7 +16,7 @@ class Settings(BaseSettings):
         case_sensitive = True
 
 
-# Initialize settings with better error handling for Vercel
+# Initialize settings with better error handling
 try:
     settings = Settings()
 except Exception as e:
@@ -30,7 +30,7 @@ except Exception as e:
     if missing_vars:
         error_msg = (
             f"Missing required environment variables: {', '.join(missing_vars)}. "
-            "Please set these in your Vercel project settings under Environment Variables."
+            "Please set these in your deployment platform's environment variables."
         )
         raise ValueError(error_msg) from e
     raise

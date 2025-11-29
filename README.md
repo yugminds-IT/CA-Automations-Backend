@@ -9,7 +9,7 @@ A FastAPI backend boilerplate with JWT authentication, PostgreSQL database, and 
 - PostgreSQL database with SQLAlchemy
 - Tenant middleware for multi-tenant support
 - Alembic for database migrations
-- Vercel serverless deployment support
+- Render deployment support
 
 ## Setup
 
@@ -90,7 +90,7 @@ Once the server is running, you can access:
 
 ## Deployment
 
-This project is configured for deployment on Vercel. See `VERCEL_DEPLOYMENT.md` for detailed deployment instructions.
+This project is configured for deployment on Render. See `RENDER_DEPLOYMENT.md` for detailed deployment instructions.
 
 ## API Endpoints
 
@@ -134,10 +134,7 @@ backend-caa/
 ├── alembic/
 ├── alembic.ini
 ├── requirements.txt
-├── api/
-│   └── index.py
-├── vercel.json
-├── runtime.txt
+├── render.yaml
 └── README.md
 ```
 
