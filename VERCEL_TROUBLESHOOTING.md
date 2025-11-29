@@ -109,3 +109,4 @@ If issues persist:
 3. Verify all environment variables are set correctly
 4. Test database connection separately using a PostgreSQL client
 
+

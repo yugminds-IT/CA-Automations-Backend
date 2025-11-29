@@ -9,14 +9,14 @@ A FastAPI backend boilerplate with JWT authentication, PostgreSQL database, and 
 - PostgreSQL database with SQLAlchemy
 - Tenant middleware for multi-tenant support
 - Alembic for database migrations
-- Docker and Docker Compose support
+- Vercel serverless deployment support
 
 ## Setup
 
 ### Prerequisites
 
 - Python 3.11+
-- PostgreSQL (or use Docker Compose)
+- PostgreSQL database
 - pip
 
 ### Installation
@@ -57,15 +57,10 @@ cp .env .env.local  # Optional: create a local copy
 # Edit .env with your database credentials and secret key
 ```
 
-5. Start PostgreSQL (if not using Docker):
+5. Start PostgreSQL:
 ```bash
 # Make sure PostgreSQL is running and create the database
 createdb backend_caa
-```
-
-Or use Docker Compose:
-```bash
-docker-compose up -d db
 ```
 
 6. Run database migrations:
@@ -93,32 +88,9 @@ Once the server is running, you can access:
 - Swagger UI: `http://localhost:8000/docs`
 - ReDoc: `http://localhost:8000/redoc`
 
-## Docker
+## Deployment
 
-### Using Docker Compose
-
-To run the entire stack (PostgreSQL + Backend):
-
-```bash
-docker-compose up -d
-```
-
-To stop:
-```bash
-docker-compose down
-```
-
-### Using Docker only
-
-Build the image:
-```bash
-docker build -t backend-caa .
-```
-
-Run the container:
-```bash
-docker run -p 8000:8000 --env-file .env backend-caa
-```
+This project is configured for deployment on Vercel. See `VERCEL_DEPLOYMENT.md` for detailed deployment instructions.
 
 ## API Endpoints
 
@@ -162,9 +134,10 @@ backend-caa/
 ├── alembic/
 ├── alembic.ini
 ├── requirements.txt
-├── .env
-├── Dockerfile
-├── docker-compose.yml
+├── api/
+│   └── index.py
+├── vercel.json
+├── runtime.txt
 └── README.md
 ```
 
