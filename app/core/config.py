@@ -10,7 +10,8 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     class Config:
-        env_file = ".env"
+        env_file = ".env"  # Optional: only used if file exists
+        env_file_encoding = "utf-8"
         case_sensitive = True
 
 
