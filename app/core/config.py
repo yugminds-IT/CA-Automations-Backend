@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
+import os
 
 
 class Settings(BaseSettings):
@@ -15,5 +16,22 @@ class Settings(BaseSettings):
         case_sensitive = True
 
 
-settings = Settings()
+# Initialize settings with better error handling for Vercel
+try:
+    settings = Settings()
+except Exception as e:
+    # Provide helpful error message for missing environment variables
+    missing_vars = []
+    if not os.getenv("DATABASE_URL"):
+        missing_vars.append("DATABASE_URL")
+    if not os.getenv("SECRET_KEY"):
+        missing_vars.append("SECRET_KEY")
+    
+    if missing_vars:
+        error_msg = (
+            f"Missing required environment variables: {', '.join(missing_vars)}. "
+            "Please set these in your Vercel project settings under Environment Variables."
+        )
+        raise ValueError(error_msg) from e
+    raise
 
