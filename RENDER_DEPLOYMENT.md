@@ -28,9 +28,15 @@ This guide will help you deploy your FastAPI backend to Render.
 3. **Configure the Service**
    - **Name:** `backend-caa` (or your preferred name)
    - **Environment:** `Python 3`
+   - **Python Version:** `3.11.10` (IMPORTANT: Select this specific version in the dropdown - NOT 3.13!)
    - **Build Command:** `pip install -r requirements.txt`
-   - **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+   - **Start Command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT` (DO NOT use `--reload` in production)
    - **Plan:** Choose Free or Starter (Free tier is suitable for development)
+   
+   **CRITICAL:** 
+   - Make sure to select Python 3.11.10 (not 3.13 or 3.12) as SQLAlchemy 2.0.23 requires Python 3.11
+   - Do NOT use `--reload` flag in the start command (it's for development only)
+   - Make sure to use `$PORT` not a hardcoded port number like 8000
 
 4. **Configure Environment Variables**
    - Scroll down to "Environment Variables"
@@ -138,11 +144,42 @@ After deployment, test your endpoints:
 
 ## Troubleshooting
 
+### Python Version Error (AssertionError with SQLAlchemy)
+
+**Error:** `AssertionError: Class <class 'sqlalchemy.sql.elements.SQLCoreOperations'> directly inherits TypingOnly but has additional attributes`
+
+**Cause:** Render is using Python 3.13, but SQLAlchemy 2.0.23 requires Python 3.11.
+
+**Solution:**
+1. Go to your Render service dashboard
+2. Click on "Settings" tab
+3. Scroll down to "Python Version"
+4. **Change from Python 3.13 to Python 3.11.10** (or 3.11.x)
+5. Click "Save Changes"
+6. Render will automatically redeploy with the new Python version
+
+**Alternative:** If using `render.yaml`, make sure `runtime.txt` exists with `3.11.10` in it.
+
+### Port Binding Error
+
+**Error:** `No open ports detected` or `Port scan timeout reached`
+
+**Cause:** The start command is not binding to the `$PORT` environment variable.
+
+**Solution:**
+1. Go to your Render service dashboard
+2. Click on "Settings" tab
+3. Find "Start Command"
+4. Make sure it's exactly: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+5. **Remove `--reload` flag** (it's for development only)
+6. **Do NOT use hardcoded ports** like `8000`
+7. Click "Save Changes"
+
 ### Build Errors
 
 If you encounter build errors:
 1. Check that all dependencies in `requirements.txt` are compatible
-2. Ensure Python version is 3.11+ (Render auto-detects from your code)
+2. Ensure Python version is 3.11.10 (not 3.13)
 3. Check Render build logs for specific error messages
 
 ### Database Connection Issues
