@@ -4,6 +4,8 @@ from jose import JWTError, jwt
 import secrets
 import base64
 import bcrypt
+import string
+from cryptography.fernet import Fernet
 from app.core.config import settings
 
 # Use bcrypt directly to avoid passlib compatibility issues with bcrypt 5.0.0
@@ -74,6 +76,104 @@ def validate_password(password: str) -> Tuple[bool, str]:
         return False, "Password must contain at least one digit"
     
     return True, ""
+
+
+def validate_client_password(password: str) -> Tuple[bool, str]:
+    """
+    Validate client password strength (relaxed rules).
+    Returns (is_valid, error_message)
+    Requirements:
+    - At least 6 characters long
+    - No uppercase/lowercase/digit constraints
+    """
+    if not password or not isinstance(password, str):
+        return False, "Password must be a non-empty string"
+    if len(password) < 6:
+        return False, "Password must be at least 6 characters long"
+    return True, ""
+
+
+def get_encryption_key() -> bytes:
+    """
+    Get or generate encryption key for storing plain passwords.
+    Uses ENCRYPTION_KEY from settings, or generates one from SECRET_KEY if not set.
+    """
+    if settings.ENCRYPTION_KEY:
+        return settings.ENCRYPTION_KEY.encode()
+    else:
+        # Generate a key from SECRET_KEY (deterministic but secure enough for this use case)
+        import hashlib
+        key = hashlib.sha256(settings.SECRET_KEY.encode()).digest()
+        return base64.urlsafe_b64encode(key)
+
+
+def encrypt_password(plain_password: str) -> Optional[str]:
+    """
+    Encrypt a plain password for storage.
+    Returns None if encryption is not configured.
+    """
+    if not plain_password:
+        return None
+    try:
+        key = get_encryption_key()
+        fernet = Fernet(key)
+        encrypted = fernet.encrypt(plain_password.encode())
+        return encrypted.decode()
+    except Exception:
+        # If encryption fails, return None (password won't be stored)
+        return None
+
+
+def decrypt_password(encrypted_password: Optional[str]) -> Optional[str]:
+    """
+    Decrypt a stored password.
+    Returns None if decryption fails or password is not stored.
+    """
+    if not encrypted_password:
+        return None
+    try:
+        key = get_encryption_key()
+        fernet = Fernet(key)
+        decrypted = fernet.decrypt(encrypted_password.encode())
+        return decrypted.decode()
+    except Exception:
+        # If decryption fails, return None
+        return None
+
+
+def generate_secure_password(length: int = 12) -> str:
+    """
+    Generate a secure random password.
+    
+    Args:
+        length: Length of the password (default: 12, minimum: 8)
+    
+    Returns:
+        A secure random password containing uppercase, lowercase, digits, and special characters.
+    """
+    if length < 8:
+        length = 8  # Minimum length for security
+    
+    # Define character sets
+    alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+    
+    # Ensure password contains at least one character from each set
+    password_chars = [
+        secrets.choice(string.ascii_lowercase),  # At least one lowercase
+        secrets.choice(string.ascii_uppercase),  # At least one uppercase
+        secrets.choice(string.digits),            # At least one digit
+        secrets.choice("!@#$%^&*"),               # At least one special char
+    ]
+    
+    # Fill the rest with random characters
+    remaining_length = length - len(password_chars)
+    for _ in range(remaining_length):
+        password_chars.append(secrets.choice(alphabet))
+    
+    # Shuffle to avoid predictable pattern
+    secrets.SystemRandom().shuffle(password_chars)
+    
+    return ''.join(password_chars)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None, min_length: int = 1000) -> str:

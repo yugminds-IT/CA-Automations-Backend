@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "backend-caa-api-collection",
 		"name": "Backend CAA API",
-		"description": "Complete collection for testing Backend CAA API - Chartered Accountancy Automation Platform",
+		"description": "Complete collection for testing Backend CAA API - Chartered Accountancy Automation Platform\n\n## Security Notes:\n- Master Admin endpoints require Bearer token authentication with MASTER_ADMIN role\n- Non-master-admin users will receive 403 Forbidden when accessing master admin endpoints\n- Use master_admin_access_token for all master admin API calls\n- Regular admin/employee/client tokens will be rejected for master admin endpoints",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -42,6 +42,65 @@
 							]
 						},
 						"description": "Check if the API server is running"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Test Email",
+			"item": [
+				{
+					"name": "Send Test Email",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    console.log(\"✓ Test email sent successfully\");",
+									"    console.log(\"To:\", jsonData.to_email);",
+									"    console.log(\"Message:\", jsonData.message);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"to_email\": \"your-email@gmail.com\",\n  \"subject\": \"Test Email from CAA Backend\",\n  \"message\": \"This is a test email to verify your email configuration is working correctly.\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/test-email",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"test-email"
+							]
+						},
+						"description": "Send a test email to verify email configuration.\n\n**Auth:** Admin or Employee role required\n\n**Request Body:**\n- to_email: Email address to send test email to (required)\n- subject: Email subject (optional, defaults to \"Test Email from CAA Backend\")\n- message: Test message content (optional, defaults to standard test message)\n\n**Note:** Make sure SMTP settings are configured in your .env file before testing."
 					},
 					"response": []
 				}
@@ -217,6 +276,70 @@
 						"description": "Get a new access token using a valid refresh token."
 					},
 					"response": []
+				},
+				{
+					"name": "Client Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"client_access_token\", jsonData.access_token);",
+									"    pm.environment.set(\"client_refresh_token\", jsonData.refresh_token);",
+									"    console.log(\"✓ Client login successful\");",
+									"    console.log(\"Client User:\", jsonData.user.email, \"(\", jsonData.user.role, \")\");",
+									"    console.log(\"Organization:\", jsonData.organization.name);",
+									"    if (jsonData.user.role === 'client') {",
+									"        console.log(\"✓ Client role confirmed - has client-level access\");",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/x-www-form-urlencoded"
+							}
+						],
+						"body": {
+							"mode": "urlencoded",
+							"urlencoded": [
+								{
+									"key": "username",
+									"value": "{{client_login_email}}",
+									"type": "text",
+									"description": "Client's login email (provided by admin)"
+								},
+								{
+									"key": "password",
+									"value": "ClientPass123",
+									"type": "text",
+									"description": "Client's login password (provided by admin)"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"auth",
+								"login"
+							]
+						},
+						"description": "Login as a client using credentials provided by admin. Clients use the same login endpoint as employees and admins, but will have role='client' in the response."
+					},
+					"response": []
 				}
 			]
 		},
@@ -295,8 +418,7 @@
 							},
 							{
 								"key": "Authorization",
-								"value": "Bearer {{access_token}}",
-								"description": "Optional: Only if auth required in future"
+								"value": "Bearer {{access_token}}"
 							}
 						],
 						"body": {
@@ -325,6 +447,2051 @@
 					"response": []
 				}
 			]
+		},
+		{
+			"name": "Master Admin",
+			"item": [
+				{
+					"name": "Authentication",
+					"item": [
+						{
+							"name": "Master Admin Signup",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 201) {",
+											"    var jsonData = pm.response.json();",
+											"    pm.environment.set(\"master_admin_email\", jsonData.user.email);",
+											"    pm.environment.set(\"master_admin_org_id\", jsonData.organization.id);",
+											"    console.log(\"✓ Master admin created successfully\");",
+											"    console.log(\"Master Admin Email:\", jsonData.user.email);",
+											"    console.log(\"Organization ID:\", jsonData.organization.id);",
+											"    console.log(\"Role:\", jsonData.user.role);",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"email\": \"masteradmin@system.com\",\n  \"password\": \"MasterAdmin123\",\n  \"full_name\": \"Master Administrator\",\n  \"phone\": \"+1234567890\",\n  \"org_id\": null\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/master-admin/auth/signup",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"master-admin",
+										"auth",
+										"signup"
+									]
+								},
+								"description": "Create a new master admin user. If org_id is not provided, will use or create 'System Administration' organization. Password must be at least 8 characters with uppercase, lowercase, and digit."
+							},
+							"response": []
+						},
+						{
+							"name": "Master Admin Login",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    var jsonData = pm.response.json();",
+											"    pm.environment.set(\"master_admin_access_token\", jsonData.access_token);",
+											"    pm.environment.set(\"master_admin_refresh_token\", jsonData.refresh_token);",
+											"    console.log(\"✓ Master admin login successful\");",
+											"    console.log(\"Access token length:\", jsonData.access_token.length, \"characters\");",
+											"    console.log(\"Refresh token length:\", jsonData.refresh_token.length, \"characters\");",
+											"    console.log(\"User:\", jsonData.user.email, \"(\", jsonData.user.role, \")\");",
+											"    console.log(\"Organization:\", jsonData.organization.name);",
+											"    if (jsonData.user.role === 'master_admin') {",
+											"        console.log(\"✓ Master admin role confirmed\");",
+											"    }",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/x-www-form-urlencoded"
+									}
+								],
+								"body": {
+									"mode": "urlencoded",
+									"urlencoded": [
+										{
+											"key": "username",
+											"value": "{{master_admin_email}}",
+											"type": "text",
+											"description": "Master admin email address"
+										},
+										{
+											"key": "password",
+											"value": "MasterAdmin123",
+											"type": "text"
+										}
+									]
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/master-admin/auth/login",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"master-admin",
+										"auth",
+										"login"
+									]
+								},
+								"description": "Login as master admin.\n\n⚠️ **SECURITY: Master Admin Role Required**\n- Only users with MASTER_ADMIN role can use this endpoint\n- Regular admin/employee/client users will receive 403 Forbidden\n- Returns access token and refresh token (1000+ characters each)\n- Token must be used in {{master_admin_access_token}} for all master admin API calls"
+							},
+							"response": []
+						},
+						{
+							"name": "Master Admin Refresh Token",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    var jsonData = pm.response.json();",
+											"    pm.environment.set(\"master_admin_access_token\", jsonData.access_token);",
+											"    console.log(\"✓ New master admin access token received\");",
+											"    console.log(\"Access token length:\", jsonData.access_token.length, \"characters\");",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"refresh_token\": \"{{master_admin_refresh_token}}\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/master-admin/auth/refresh",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"master-admin",
+										"auth",
+										"refresh"
+									]
+								},
+								"description": "Refresh master admin access token.\n\n⚠️ **SECURITY: Master Admin Only**\n- Only works for users with MASTER_ADMIN role\n- Non-master-admin users will receive 403 Forbidden\n- Requires a valid master admin refresh token\n- Returns new access token (1000+ characters)"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Organizations",
+					"item": [
+						{
+							"name": "List All Organizations",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    var jsonData = pm.response.json();",
+											"    console.log(\"✓ Organizations retrieved successfully\");",
+											"    console.log(\"Total organizations:\", jsonData.total);",
+											"    console.log(\"Returned:\", jsonData.organizations.length, \"organizations\");",
+											"    if (jsonData.organizations.length > 0) {",
+											"        pm.environment.set(\"master_admin_org_id\", jsonData.organizations[0].id);",
+											"        console.log(\"First org ID set:\", jsonData.organizations[0].id);",
+											"    }",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{master_admin_access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/master-admin/org/?skip=0&limit=100&search=",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"master-admin",
+										"org",
+										""
+									],
+									"query": [
+										{
+											"key": "skip",
+											"value": "0",
+											"description": "Number of records to skip (pagination)"
+										},
+										{
+											"key": "limit",
+											"value": "100",
+											"description": "Maximum number of records to return"
+										},
+										{
+											"key": "search",
+											"value": "",
+											"description": "Search term for name, city, state, country"
+										}
+									]
+								},
+								"description": "List all organizations with pagination and optional search.\n\n⚠️ **SECURITY: Master Admin Only**\n- Requires: Bearer token with MASTER_ADMIN role\n- Non-master-admin users will receive 403 Forbidden\n- Use {{master_admin_access_token}} in Authorization header"
+							},
+							"response": []
+						},
+						{
+							"name": "Get Organization by ID",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{master_admin_access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/master-admin/org/{{master_admin_org_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"master-admin",
+										"org",
+										"{{master_admin_org_id}}"
+									]
+								},
+								"description": "Get organization by ID.\n\n⚠️ **SECURITY: Master Admin Only**\n- Requires: Bearer token with MASTER_ADMIN role\n- Non-master-admin users will receive 403 Forbidden\n- Use {{master_admin_access_token}} in Authorization header"
+							},
+							"response": []
+						},
+						{
+							"name": "Create Organization",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 201) {",
+											"    var jsonData = pm.response.json();",
+											"    pm.environment.set(\"master_admin_org_id\", jsonData.id);",
+											"    console.log(\"✓ Organization created successfully\");",
+											"    console.log(\"Organization ID:\", jsonData.id);",
+											"    console.log(\"Organization Name:\", jsonData.name);",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{master_admin_access_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"New Organization Ltd\",\n  \"city\": \"Mumbai\",\n  \"state\": \"Maharashtra\",\n  \"country\": \"India\",\n  \"pincode\": \"400001\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/master-admin/org/",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"master-admin",
+										"org",
+										""
+									]
+								},
+								"description": "Create a new organization.\n\n⚠️ **SECURITY: Master Admin Only**\n- Requires: Bearer token with MASTER_ADMIN role\n- Non-master-admin users will receive 403 Forbidden\n- Use {{master_admin_access_token}} in Authorization header\n\n**Request Body:**\n- Required: name\n- Optional: city, state, country, pincode"
+							},
+							"response": []
+						},
+						{
+							"name": "Update Organization",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{master_admin_access_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"Updated Organization Name\",\n  \"city\": \"Pune\",\n  \"state\": \"Maharashtra\",\n  \"country\": \"India\",\n  \"pincode\": \"411001\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/master-admin/org/{{master_admin_org_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"master-admin",
+										"org",
+										"{{master_admin_org_id}}"
+									]
+								},
+								"description": "Update an organization.\n\n⚠️ **SECURITY: Master Admin Only**\n- Requires: Bearer token with MASTER_ADMIN role\n- Non-master-admin users will receive 403 Forbidden\n- Use {{master_admin_access_token}} in Authorization header\n\n**Request Body:** All fields are optional (name, city, state, country, pincode)"
+							},
+							"response": []
+						},
+						{
+							"name": "Delete Organization",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{master_admin_access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/master-admin/org/{{master_admin_org_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"master-admin",
+										"org",
+										"{{master_admin_org_id}}"
+									]
+								},
+								"description": "Delete an organization.\n\n⚠️ **SECURITY: Master Admin Only**\n- Requires: Bearer token with MASTER_ADMIN role\n- Non-master-admin users will receive 403 Forbidden\n- Use {{master_admin_access_token}} in Authorization header\n\n**Note:** Cannot delete organization with users - must remove or reassign users first."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Users",
+					"item": [
+						{
+							"name": "List All Users",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    var jsonData = pm.response.json();",
+											"    console.log(\"✓ Users retrieved successfully\");",
+											"    console.log(\"Total users:\", jsonData.total);",
+											"    console.log(\"Returned:\", jsonData.users.length, \"users\");",
+											"    if (jsonData.users.length > 0) {",
+											"        pm.environment.set(\"master_admin_user_id\", jsonData.users[0].id);",
+											"        console.log(\"First user ID set:\", jsonData.users[0].id);",
+											"    }",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{master_admin_access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/master-admin/user/?skip=0&limit=100&org_id=&role=&search=",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"master-admin",
+										"user",
+										""
+									],
+									"query": [
+										{
+											"key": "skip",
+											"value": "0",
+											"description": "Number of records to skip (pagination)"
+										},
+										{
+											"key": "limit",
+											"value": "100",
+											"description": "Maximum number of records to return"
+										},
+										{
+											"key": "org_id",
+											"value": "",
+											"description": "Filter by organization ID (optional)"
+										},
+										{
+											"key": "role",
+											"value": "",
+											"description": "Filter by role: master_admin, admin, employee, client (optional)"
+										},
+										{
+											"key": "search",
+											"value": "",
+											"description": "Search term for email, full_name, phone (optional)"
+										}
+									]
+								},
+								"description": "List all users across all organizations with pagination and optional filters.\n\n⚠️ **SECURITY: Master Admin Only**\n- Requires: Bearer token with MASTER_ADMIN role\n- Non-master-admin users will receive 403 Forbidden\n- Use {{master_admin_access_token}} in Authorization header\n\n**Query Parameters:**\n- skip: Pagination offset (default: 0)\n- limit: Max records to return (default: 100)\n- org_id: Filter by organization ID (optional)\n- role: Filter by role - master_admin, admin, employee, client (optional)\n- search: Search in email, full_name, phone (optional)"
+							},
+							"response": []
+						},
+						{
+							"name": "Get User by ID",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{master_admin_access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/master-admin/user/{{master_admin_user_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"master-admin",
+										"user",
+										"{{master_admin_user_id}}"
+									]
+								},
+								"description": "Get user by ID.\n\n⚠️ **SECURITY: Master Admin Only**\n- Requires: Bearer token with MASTER_ADMIN role\n- Non-master-admin users will receive 403 Forbidden\n- Use {{master_admin_access_token}} in Authorization header"
+							},
+							"response": []
+						},
+						{
+							"name": "Create User",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 201) {",
+											"    var jsonData = pm.response.json();",
+											"    pm.environment.set(\"master_admin_user_id\", jsonData.id);",
+											"    console.log(\"✓ User created successfully\");",
+											"    console.log(\"User ID:\", jsonData.id);",
+											"    console.log(\"Email:\", jsonData.email);",
+											"    console.log(\"Role:\", jsonData.role);",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{master_admin_access_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"email\": \"newuser@example.com\",\n  \"password\": \"UserPass123\",\n  \"full_name\": \"New User\",\n  \"phone\": \"+1234567890\",\n  \"org_id\": {{master_admin_org_id}},\n  \"role\": \"employee\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/master-admin/user/",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"master-admin",
+										"user",
+										""
+									]
+								},
+								"description": "Create a new user.\n\n⚠️ **SECURITY: Master Admin Only**\n- Requires: Bearer token with MASTER_ADMIN role\n- Non-master-admin users will receive 403 Forbidden\n- Use {{master_admin_access_token}} in Authorization header\n\n**Request Body:**\n- Required: email, password, org_id\n- Optional: full_name, phone, role (defaults to 'employee')\n- Valid roles: master_admin, admin, employee, client"
+							},
+							"response": []
+						},
+						{
+							"name": "Update User",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{master_admin_access_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"email\": \"updateduser@example.com\",\n  \"full_name\": \"Updated User Name\",\n  \"phone\": \"+9876543210\",\n  \"org_id\": {{master_admin_org_id}},\n  \"role\": \"admin\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/master-admin/user/{{master_admin_user_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"master-admin",
+										"user",
+										"{{master_admin_user_id}}"
+									]
+								},
+								"description": "Update a user.\n\n⚠️ **SECURITY: Master Admin Only**\n- Requires: Bearer token with MASTER_ADMIN role\n- Non-master-admin users will receive 403 Forbidden\n- Use {{master_admin_access_token}} in Authorization header\n\n**Request Body:** All fields are optional (email, full_name, phone, org_id, role)\n\n**Note:** Cannot update your own account to prevent accidental changes"
+							},
+							"response": []
+						},
+						{
+							"name": "Delete User",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{master_admin_access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/master-admin/user/{{master_admin_user_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"master-admin",
+										"user",
+										"{{master_admin_user_id}}"
+									]
+								},
+								"description": "Delete a user.\n\n⚠️ **SECURITY: Master Admin Only**\n- Requires: Bearer token with MASTER_ADMIN role\n- Non-master-admin users will receive 403 Forbidden\n- Use {{master_admin_access_token}} in Authorization header\n\n**Note:** Cannot delete your own account - attempting to do so will return 400 Bad Request"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Email Templates",
+					"item": [
+						{
+							"name": "List All Master Templates",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    var jsonData = pm.response.json();",
+											"    console.log(\"✓ Master templates retrieved successfully\");",
+											"    console.log(\"Total templates:\", jsonData.total);",
+											"    console.log(\"Returned:\", jsonData.templates.length, \"templates\");",
+											"    if (jsonData.templates.length > 0) {",
+											"        pm.environment.set(\"master_template_id\", jsonData.templates[0].id);",
+											"        console.log(\"First template ID set:\", jsonData.templates[0].id);",
+											"    }",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{master_admin_access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/master-admin/email-templates/?skip=0&limit=100&category=&type=&search=",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"master-admin",
+										"email-templates",
+										""
+									],
+									"query": [
+										{
+											"key": "skip",
+											"value": "0",
+											"description": "Number of records to skip (pagination)"
+										},
+										{
+											"key": "limit",
+											"value": "100",
+											"description": "Maximum number of records to return"
+										},
+										{
+											"key": "category",
+											"value": "",
+											"description": "Filter by category: service, login, notification, follow_up, reminder"
+										},
+										{
+											"key": "type",
+											"value": "",
+											"description": "Filter by type: gst_filing, income_tax_return, tds, audit, etc."
+										},
+										{
+											"key": "search",
+											"value": "",
+											"description": "Search term for name, subject"
+										}
+									]
+								},
+								"description": "List all master email templates.\n\n⚠️ **SECURITY: Master Admin Only**\n- Requires: Bearer token with MASTER_ADMIN role\n- Non-master-admin users will receive 403 Forbidden\n- Use {{master_admin_access_token}} in Authorization header"
+							},
+							"response": []
+						},
+						{
+							"name": "Get Master Template by ID",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{master_admin_access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/master-admin/email-templates/{{master_template_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"master-admin",
+										"email-templates",
+										"{{master_template_id}}"
+									]
+								},
+								"description": "Get master email template by ID.\n\n⚠️ **SECURITY: Master Admin Only**\n- Requires: Bearer token with MASTER_ADMIN role\n- Non-master-admin users will receive 403 Forbidden\n- Use {{master_admin_access_token}} in Authorization header"
+							},
+							"response": []
+						},
+						{
+							"name": "Create Master Template",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 201) {",
+											"    var jsonData = pm.response.json();",
+											"    pm.environment.set(\"master_template_id\", jsonData.id);",
+											"    console.log(\"✓ Master template created successfully\");",
+											"    console.log(\"Template ID:\", jsonData.id);",
+											"    console.log(\"Template Name:\", jsonData.name);",
+											"    console.log(\"Category:\", jsonData.category);",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{master_admin_access_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"GST Filing Service Template\",\n  \"category\": \"service\",\n  \"type\": \"gst_filing\",\n  \"subject\": \"GST Filing Service - {{service_name}}\",\n  \"body\": \"Dear {{client_name}},\\n\\nWe are pleased to inform you about your GST Filing service.\\n\\nService: {{service_name}}\\nOrganization: {{org_name}}\\n\\nBest regards,\\n{{org_name}}\",\n  \"variables\": [\"client_name\", \"service_name\", \"org_name\"]\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/master-admin/email-templates/",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"master-admin",
+										"email-templates",
+										""
+									]
+								},
+								"description": "Create a new master email template.\n\n⚠️ **SECURITY: Master Admin Only**\n- Requires: Bearer token with MASTER_ADMIN role\n- Non-master-admin users will receive 403 Forbidden\n- Use {{master_admin_access_token}} in Authorization header\n\n**Request Body:**\n- Required: name, category, type, subject, body\n- Optional: variables (array of variable names)\n\n**Categories:** service, login, notification, follow_up, reminder\n**Types:** gst_filing, income_tax_return, tds, audit, company_registration, tax_planning, compliances, other"
+							},
+							"response": []
+						},
+						{
+							"name": "Update Master Template",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{master_admin_access_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"Updated GST Filing Template\",\n  \"subject\": \"Updated GST Filing - {{service_name}}\",\n  \"body\": \"Dear {{client_name}},\\n\\nUpdated email body with new content.\\n\\nService: {{service_name}}\\nOrganization: {{org_name}}\",\n  \"variables\": [\"client_name\", \"service_name\", \"org_name\", \"date\"]\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/master-admin/email-templates/{{master_template_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"master-admin",
+										"email-templates",
+										"{{master_template_id}}"
+									]
+								},
+								"description": "Update a master email template.\n\n⚠️ **SECURITY: Master Admin Only**\n- Requires: Bearer token with MASTER_ADMIN role\n- Non-master-admin users will receive 403 Forbidden\n- Use {{master_admin_access_token}} in Authorization header\n\n**Request Body:** All fields are optional (name, subject, body, variables)"
+							},
+							"response": []
+						},
+						{
+							"name": "Delete Master Template",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{master_admin_access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/master-admin/email-templates/{{master_template_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"master-admin",
+										"email-templates",
+										"{{master_template_id}}"
+									]
+								},
+								"description": "Delete a master email template.\n\n⚠️ **SECURITY: Master Admin Only**\n- Requires: Bearer token with MASTER_ADMIN role\n- Non-master-admin users will receive 403 Forbidden\n- Use {{master_admin_access_token}} in Authorization header\n\n**Note:** Cannot delete master template if any organizations have customized versions."
+							},
+							"response": []
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Email Templates",
+			"item": [
+				{
+					"name": "View Master Templates",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    console.log(\"✓ Master templates retrieved successfully\");",
+									"    console.log(\"Total templates:\", jsonData.total);",
+									"    console.log(\"Returned:\", jsonData.templates.length, \"templates\");",
+									"    if (jsonData.templates.length > 0) {",
+									"        pm.environment.set(\"template_master_id\", jsonData.templates[0].id);",
+									"        console.log(\"First template ID set:\", jsonData.templates[0].id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/email-templates/master/?skip=0&limit=100&category=&type=&search=",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"email-templates",
+								"master",
+								""
+							],
+							"query": [
+								{
+									"key": "skip",
+									"value": "0",
+									"description": "Number of records to skip (pagination)"
+								},
+								{
+									"key": "limit",
+									"value": "100",
+									"description": "Maximum number of records to return"
+								},
+								{
+									"key": "category",
+									"value": "",
+									"description": "Filter by category: service, login, notification, follow_up, reminder"
+								},
+								{
+									"key": "type",
+									"value": "",
+									"description": "Filter by type: gst_filing, income_tax_return, tds, audit, etc."
+								},
+								{
+									"key": "search",
+									"value": "",
+									"description": "Search term for name, subject"
+								}
+							]
+						},
+						"description": "Get all master admin templates (read-only for org admins).\n\n**Auth:** Admin role required\n**Note:** These are read-only templates. Use customize endpoint to create org-specific versions."
+					},
+					"response": []
+				},
+				{
+					"name": "List Org Templates",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    console.log(\"✓ Org templates retrieved successfully\");",
+									"    console.log(\"Total templates:\", jsonData.total);",
+									"    console.log(\"Returned:\", jsonData.templates.length, \"templates\");",
+									"    if (jsonData.templates.length > 0) {",
+									"        pm.environment.set(\"org_template_id\", jsonData.templates[0].id);",
+									"        console.log(\"First template ID set:\", jsonData.templates[0].id);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/email-templates/?skip=0&limit=100&category=&type=&search=",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"email-templates",
+								""
+							],
+							"query": [
+								{
+									"key": "skip",
+									"value": "0",
+									"description": "Number of records to skip (pagination)"
+								},
+								{
+									"key": "limit",
+									"value": "100",
+									"description": "Maximum number of records to return"
+								},
+								{
+									"key": "category",
+									"value": "",
+									"description": "Filter by category: service, login, notification, follow_up, reminder"
+								},
+								{
+									"key": "type",
+									"value": "",
+									"description": "Filter by type: gst_filing, income_tax_return, tds, audit, etc."
+								},
+								{
+									"key": "search",
+									"value": "",
+									"description": "Search term for name, subject"
+								}
+							]
+						},
+						"description": "Get org-specific email templates.\n\n**Auth:** Admin role required\n**Note:** Returns only templates that belong to your organization."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Org Template by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/email-templates/{{org_template_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"email-templates",
+								"{{org_template_id}}"
+							]
+						},
+						"description": "Get single org template by ID.\n\n**Auth:** Admin role required\n**Note:** Verifies template belongs to your organization."
+					},
+					"response": []
+				},
+				{
+					"name": "Customize Master Template",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201 || pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"org_template_id\", jsonData.id);",
+									"    console.log(\"✓ Template customized successfully\");",
+									"    console.log(\"Template ID:\", jsonData.id);",
+									"    console.log(\"Master Template ID:\", jsonData.master_template_id);",
+									"    if (jsonData.master_template_id) {",
+									"        console.log(\"✓ This is a customized version of master template\");",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"subject\": \"Custom Subject for {{service_name}}\",\n  \"body\": \"Dear {{client_name}},\\n\\nCustom email body for your organization.\\n\\nService: {{service_name}}\\nOrganization: {{org_name}}\\n\\nBest regards,\\n{{org_name}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/email-templates/{{template_master_id}}/customize",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"email-templates",
+								"{{template_master_id}}",
+								"customize"
+							]
+						},
+						"description": "Customize a master template for your organization.\n\n**Auth:** Admin role required\n**Business Logic:**\n- If org already has customized version, updates it\n- If not, creates new customized template\n- Links to master template via master_template_id\n\n**Request Body:**\n- Optional: subject, body\n- If not provided, uses master template's subject/body\n\n**Note:** Name, category, type, and variables are copied from master template."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Custom Org Template",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"org_template_id\", jsonData.id);",
+									"    console.log(\"✓ Custom template created successfully\");",
+									"    console.log(\"Template ID:\", jsonData.id);",
+									"    console.log(\"Template Name:\", jsonData.name);",
+									"    if (!jsonData.master_template_id) {",
+									"        console.log(\"✓ This is a custom template (not based on master)\");",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Custom Org Template\",\n  \"category\": \"notification\",\n  \"type\": \"other\",\n  \"subject\": \"Custom Notification - {{client_name}}\",\n  \"body\": \"Dear {{client_name}},\\n\\nThis is a custom template created specifically for our organization.\\n\\nBest regards,\\n{{org_name}}\",\n  \"variables\": [\"client_name\", \"org_name\"]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/email-templates/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"email-templates",
+								""
+							]
+						},
+						"description": "Create a custom template for your organization.\n\n**Auth:** Admin role required\n**Business Logic:**\n- Creates a custom template (not based on master)\n- master_template_id will be null\n- Only visible to your organization\n\n**Request Body:**\n- Required: name, category, type, subject, body\n- Optional: variables (array of variable names)"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Org Template",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Updated Template Name\",\n  \"subject\": \"Updated Subject - {{service_name}}\",\n  \"body\": \"Dear {{client_name}},\\n\\nUpdated email body content.\\n\\nService: {{service_name}}\",\n  \"variables\": [\"client_name\", \"service_name\", \"org_name\"]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/email-templates/{{org_template_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"email-templates",
+								"{{org_template_id}}"
+							]
+						},
+						"description": "Update an org-specific template.\n\n**Auth:** Admin role required\n**Business Logic:**\n- Verifies template belongs to your organization\n- Only updates templates where is_default=False\n\n**Request Body:** All fields are optional (name, subject, body, variables)"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Org Template",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/email-templates/{{org_template_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"email-templates",
+								"{{org_template_id}}"
+							]
+						},
+						"description": "Delete an org-specific template.\n\n**Auth:** Admin role required\n**Business Logic:**\n- Verifies template belongs to your organization\n- Only deletes templates where is_default=False"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Clients",
+			"item": [
+				{
+					"name": "Create Client (with Login)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set(\"client_id\", jsonData.id);",
+									"    pm.environment.set(\"client_login_email\", pm.request.body.urlencoded.find(p => p.key === 'login_email')?.value || '');",
+									"    console.log(\"✓ Client created successfully\");",
+									"    console.log(\"Client ID:\", jsonData.id);",
+									"    console.log(\"Client Name:\", jsonData.client_name);",
+									"    if (jsonData.user_id) {",
+									"        console.log(\"✓ Login account created - Client can login\");",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"client_name\": \"John Client\",\n  \"email\": \"contact@clientcorp.com\",\n  \"phone_number\": \"+1234567890\",\n  \"company_name\": \"Client Corp Private Limited\",\n  \"business_type\": \"private Limited\",\n  \"pan_number\": \"ABCDE1234F\",\n  \"gst_number\": \"27ABCDE1234F1Z5\",\n  \"status\": \"active\",\n  \"address\": \"123 Business Street\",\n  \"city\": \"Mumbai\",\n  \"state\": \"Maharashtra\",\n  \"country\": \"India\",\n  \"pin_code\": \"400001\",\n  \"onboard_date\": \"2024-01-15\",\n  \"follow_date\": \"2024-02-15\",\n  \"additional_notes\": \"Important client - handle with care\",\n  \"service_ids\": [1, 2],\n  \"directors\": [\n    {\n      \"director_name\": \"John Director\",\n      \"email\": \"director@clientcorp.com\",\n      \"phone_number\": \"+1234567891\",\n      \"din\": \"12345678\",\n      \"pan\": \"ABCDE1234D\",\n      \"aadhaar\": \"1234 5678 9012\"\n    }\n  ],\n  \"login_email\": \"client@clientcorp.com\",\n  \"login_password\": \"ClientPass123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/client/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"client",
+								""
+							]
+						},
+						"description": "Create a new client with optional login credentials. If login_email and login_password are provided, a User account with CLIENT role will be created, allowing the client to login to the system."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Client (without Login)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"client_name\": \"Jane Client\",\n  \"email\": \"contact@anotherclient.com\",\n  \"phone_number\": \"+9876543210\",\n  \"company_name\": \"Another Client LLP\",\n  \"business_type\": \"LLP\",\n  \"pan_number\": \"FGHIJ5678K\",\n  \"gst_number\": \"27FGHIJ5678K2Z6\",\n  \"status\": \"active\",\n  \"address\": \"456 Corporate Avenue\",\n  \"city\": \"Delhi\",\n  \"state\": \"Delhi\",\n  \"country\": \"India\",\n  \"pin_code\": \"110001\",\n  \"service_ids\": [1, 3, 5],\n  \"directors\": []\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/client/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"client",
+								""
+							]
+						},
+						"description": "Create a new client without login credentials. Client will be a data record only, cannot login."
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Clients",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/client/?skip=0&limit=100&search=&status_filter=",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"client",
+								""
+							],
+							"query": [
+								{
+									"key": "skip",
+									"value": "0",
+									"description": "Number of records to skip (pagination)"
+								},
+								{
+									"key": "limit",
+									"value": "100",
+									"description": "Maximum number of records to return"
+								},
+								{
+									"key": "search",
+									"value": "",
+									"description": "Search term (searches in client_name, company_name, email, phone_number)"
+								},
+								{
+									"key": "status_filter",
+									"value": "",
+									"description": "Filter by status: active, inactive, or terminated"
+								}
+							]
+						},
+						"description": "Get all clients with optional search and filter. Supports pagination."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Client by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/client/{{client_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"client",
+								"{{client_id}}"
+							]
+						},
+						"description": "Get a specific client by ID"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Client",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"client_name\": \"John Client Updated\",\n  \"phone_number\": \"+1234567899\",\n  \"status\": \"active\",\n  \"city\": \"Pune\",\n  \"additional_notes\": \"Updated notes\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/client/{{client_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"client",
+								"{{client_id}}"
+							]
+						},
+						"description": "Update client information. All fields are optional."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Client Login Credentials",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    console.log(\"✓ Client login credentials updated\");",
+									"    console.log(\"Client can now login with new credentials\");",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"login_email\": \"newemail@clientcorp.com\",\n  \"login_password\": \"NewClientPass123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/client/{{client_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"client",
+								"{{client_id}}"
+							]
+						},
+						"description": "Update client login credentials. If client doesn't have a login account yet, both login_email and login_password are required. If client already has an account, you can update email and/or password."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Login for Existing Client",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    console.log(\"✓ Login account created for existing client\");",
+									"    console.log(\"Client can now login\");",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"login_email\": \"client@existingclient.com\",\n  \"login_password\": \"ClientPass123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/client/{{client_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"client",
+								"{{client_id}}"
+							]
+						},
+						"description": "Create login credentials for a client that was created without login. Both login_email and login_password are required."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Client",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/client/{{client_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"client",
+								"{{client_id}}"
+							]
+						},
+						"description": "Delete a client. This will also delete associated directors and service relationships."
+					},
+					"response": []
+				},
+				{
+					"name": "Export Clients to Excel",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/v1/client/export/excel",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"v1",
+								"client",
+								"export",
+								"excel"
+							]
+						},
+						"description": "Export all clients to an Excel file (.xlsx)"
+					},
+					"response": []
+				},
+				{
+					"name": "Services",
+					"item": [
+						{
+							"name": "Get All Services",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/client/services/",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"client",
+										"services",
+										""
+									]
+								},
+								"description": "Get all available services (default and custom)"
+							},
+							"response": []
+						},
+						{
+							"name": "Create Custom Service",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"name\": \"Custom Service Name\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/client/services/",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"client",
+										"services",
+										""
+									]
+								},
+								"description": "Create a custom service"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Email Configuration",
+					"item": [
+						{
+							"name": "Create Email Config",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 201) {",
+											"    console.log(\"✓ Email configuration created successfully\");",
+											"    var jsonData = pm.response.json();",
+											"    console.log(\"Client ID:\", jsonData.client_id);",
+											"    console.log(\"Emails:\", jsonData.emails);",
+											"    console.log(\"Services configured:\", Object.keys(jsonData.services).length);",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"emails\": [\"email1@example.com\", \"email2@example.com\"],\n  \"emailTemplates\": {\n    \"email1@example.com\": {\n      \"email\": \"email1@example.com\",\n      \"selectedTemplates\": [1, 2, 3]\n    },\n    \"email2@example.com\": {\n      \"email\": \"email2@example.com\",\n      \"selectedTemplates\": [4, 5]\n    }\n  },\n  \"services\": {\n    \"1\": {\n      \"enabled\": true,\n      \"templateId\": 1,\n      \"templateName\": \"GST Filing Template\",\n      \"dateType\": \"single\",\n      \"scheduledDate\": \"2024-03-15\",\n      \"scheduledDateFrom\": null,\n      \"scheduledDateTo\": null,\n      \"scheduledTimes\": [\"09:00\", \"14:00\", \"17:00\"]\n    },\n    \"2\": {\n      \"enabled\": true,\n      \"templateId\": 2,\n      \"templateName\": \"Income Tax Template\",\n      \"dateType\": \"range\",\n      \"scheduledDate\": null,\n      \"scheduledDateFrom\": \"2024-03-01\",\n      \"scheduledDateTo\": \"2024-03-31\",\n      \"scheduledTimes\": [\"10:00\"]\n    },\n    \"3\": {\n      \"enabled\": true,\n      \"templateId\": 3,\n      \"templateName\": \"Monthly Reminder\",\n      \"dateType\": \"all\",\n      \"scheduledDate\": null,\n      \"scheduledDateFrom\": null,\n      \"scheduledDateTo\": null,\n      \"scheduledTimes\": [\"09:00\"]\n    }\n  }\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/client/{{client_id}}/email-config",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"client",
+										"{{client_id}}",
+										"email-config"
+									]
+								},
+								"description": "Create email configuration for a client. Requires admin/employee role.\n\n**Request Body:**\n- emails: List of recipient email addresses\n- emailTemplates: Map of email -> template selection\n- services: Map of service_id -> service configuration\n\n**dateType options:**\n- \"single\": Send on specific date (requires scheduledDate)\n- \"range\": Send daily from scheduledDateFrom to scheduledDateTo\n- \"all\": Send daily recurring (no end date)\n\n**scheduledTimes:** Array of times in HH:mm format (24-hour)"
+							},
+							"response": []
+						},
+						{
+							"name": "Update Email Config",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"emails\": [\"email1@example.com\", \"email2@example.com\"],\n  \"emailTemplates\": {\n    \"email1@example.com\": {\n      \"email\": \"email1@example.com\",\n      \"selectedTemplates\": [1, 2, 3]\n    }\n  },\n  \"services\": {\n    \"1\": {\n      \"enabled\": true,\n      \"templateId\": 1,\n      \"templateName\": \"GST Filing Template\",\n      \"dateType\": \"single\",\n      \"scheduledDate\": \"2024-03-20\",\n      \"scheduledDateFrom\": null,\n      \"scheduledDateTo\": null,\n      \"scheduledTimes\": [\"09:00\", \"17:00\"]\n    }\n  }\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/client/{{client_id}}/email-config",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"client",
+										"{{client_id}}",
+										"email-config"
+									]
+								},
+								"description": "Update email configuration for a client. Requires admin/employee role.\n\n**Note:** Cancels all pending scheduled emails and creates new ones based on updated configuration."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Email Config",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/client/{{client_id}}/email-config",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"client",
+										"{{client_id}}",
+										"email-config"
+									]
+								},
+								"description": "Get email configuration for a client. Requires admin/employee role.\n\nReturns 404 if configuration doesn't exist."
+							},
+							"response": []
+						},
+						{
+							"name": "Delete Email Config",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/client/{{client_id}}/email-config",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"client",
+										"{{client_id}}",
+										"email-config"
+									]
+								},
+								"description": "Delete email configuration for a client and cancel all scheduled emails. Requires admin/employee role."
+							},
+							"response": []
+						},
+						{
+							"name": "Get Scheduled Emails",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"if (pm.response.code === 200) {",
+											"    var jsonData = pm.response.json();",
+											"    console.log(\"✓ Scheduled emails retrieved\");",
+											"    console.log(\"Total:\", jsonData.total);",
+											"    console.log(\"Returned:\", jsonData.scheduled_emails.length, \"emails\");",
+											"    if (jsonData.scheduled_emails.length > 0) {",
+											"        pm.environment.set(\"scheduled_email_id\", jsonData.scheduled_emails[0].id);",
+											"        console.log(\"First scheduled email ID set:\", jsonData.scheduled_emails[0].id);",
+											"    }",
+											"}"
+										],
+										"type": "text/javascript"
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/client/{{client_id}}/scheduled-emails?status=&limit=100&skip=0",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"client",
+										"{{client_id}}",
+										"scheduled-emails"
+									],
+									"query": [
+										{
+											"key": "status",
+											"value": "",
+											"description": "Filter by status: pending, sent, failed, cancelled (optional)"
+										},
+										{
+											"key": "limit",
+											"value": "100",
+											"description": "Maximum number of records to return"
+										},
+										{
+											"key": "skip",
+											"value": "0",
+											"description": "Number of records to skip (pagination)"
+										}
+									]
+								},
+								"description": "Get scheduled emails for a client. Requires admin/employee role.\n\n**Query Parameters:**\n- status: Filter by status (optional)\n- limit: Max records (default: 100)\n- skip: Pagination offset (default: 0)"
+							},
+							"response": []
+						},
+						{
+							"name": "Cancel Scheduled Email",
+							"request": {
+								"method": "DELETE",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/client/{{client_id}}/scheduled-emails/{{scheduled_email_id}}",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"client",
+										"{{client_id}}",
+										"scheduled-emails",
+										"{{scheduled_email_id}}"
+									]
+								},
+								"description": "Cancel a specific scheduled email. Requires admin/employee role.\n\n**Note:** Only cancels emails with 'pending' status."
+							},
+							"response": []
+						},
+						{
+							"name": "Retry Failed Email",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/client/{{client_id}}/scheduled-emails/{{scheduled_email_id}}/retry",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"client",
+										"{{client_id}}",
+										"scheduled-emails",
+										"{{scheduled_email_id}}",
+										"retry"
+									]
+								},
+								"description": "Retry a failed scheduled email. Requires admin/employee role.\n\n**Note:** Only works for emails with 'failed' status. Resets status to 'pending' and reschedules."
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Enums",
+					"item": [
+						{
+							"name": "Get Client Status Enum",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/client/enums/status/",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"client",
+										"enums",
+										"status",
+										""
+									]
+								},
+								"description": "Get all available client status values"
+							},
+							"response": []
+						},
+						{
+							"name": "Get Business Type Enum",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/client/enums/business-type/",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"client",
+										"enums",
+										"business-type",
+										""
+									]
+								},
+								"description": "Get all available business type values"
+							},
+							"response": []
+						},
+						{
+							"name": "Get Service Type Enum",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{access_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/api/v1/client/enums/service-type/",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"api",
+										"v1",
+										"client",
+										"enums",
+										"service-type",
+										""
+									]
+								},
+								"description": "Get all available default service type values"
+							},
+							"response": []
+						}
+					]
+				}
+			]
 		}
 	],
 	"variable": [
@@ -351,6 +2518,71 @@
 		{
 			"key": "admin_email",
 			"value": "admin@abcca.com",
+			"type": "string"
+		},
+		{
+			"key": "client_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "client_login_email",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "client_access_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "client_refresh_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "master_admin_access_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "master_admin_refresh_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "master_admin_email",
+			"value": "masteradmin@system.com",
+			"type": "string"
+		},
+		{
+			"key": "master_admin_org_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "master_admin_user_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "master_template_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "template_master_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "org_template_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "scheduled_email_id",
+			"value": "",
 			"type": "string"
 		}
 	]

@@ -6,8 +6,10 @@ from app.db.base import Base
 
 
 class UserRole(str, enum.Enum):
+    MASTER_ADMIN = "master_admin"
     ADMIN = "admin"
     EMPLOYEE = "employee"
+    CLIENT = "client"
 
 
 class User(Base):
@@ -16,6 +18,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
+    encrypted_plain_password = Column(String, nullable=True)  # Encrypted plain password (for client accounts, cleared when password is changed)
     full_name = Column(String, nullable=True)
     phone = Column(String, nullable=True, index=True)
     org_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)

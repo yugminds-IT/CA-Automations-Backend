@@ -14,7 +14,7 @@ load_dotenv()
 
 # Import Base and models
 from app.db.base import Base
-from app.db.models import organization, user, refresh_token  # noqa
+from app.db.models import organization, user, refresh_token, client, service, email_template, upload_file  # noqa
 
 # this is the Alembic Config object
 config = context.config

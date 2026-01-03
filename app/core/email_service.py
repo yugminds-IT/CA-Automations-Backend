@@ -1,0 +1,285 @@
+"""
+Email service for sending emails to users.
+Supports sending login credentials to admins, employees, and clients.
+"""
+import aiosmtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from typing import Optional
+import logging
+from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+
+def is_email_configured() -> bool:
+    """Check if email is properly configured"""
+    return all([
+        settings.SMTP_HOST,
+        settings.SMTP_USER,
+        settings.SMTP_PASSWORD,
+        settings.SMTP_FROM_EMAIL
+    ])
+
+
+async def send_email(
+    to_email: str,
+    subject: str,
+    html_body: str,
+    plain_body: Optional[str] = None
+) -> bool:
+    """
+    Send an email using SMTP.
+    
+    Args:
+        to_email: Recipient email address
+        subject: Email subject
+        html_body: HTML email body
+        plain_body: Plain text email body (optional, auto-generated from HTML if not provided)
+    
+    Returns:
+        True if email was sent successfully, False otherwise
+    """
+    if not is_email_configured():
+        logger.warning("Email not configured. Skipping email send.")
+        return False
+    
+    try:
+        logger.debug(f"Preparing email to {to_email} with subject: {subject[:50]}...")
+        
+        # Create message
+        message = MIMEMultipart("alternative")
+        message["Subject"] = subject
+        message["From"] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_FROM_EMAIL}>"
+        message["To"] = to_email
+        
+        # Create plain text version if not provided
+        if not plain_body:
+            # Simple HTML to text conversion (remove tags)
+            import re
+            plain_body = re.sub(r'<[^>]+>', '', html_body)
+            plain_body = plain_body.replace('&nbsp;', ' ').strip()
+        
+        # Add both plain and HTML versions
+        part1 = MIMEText(plain_body, "plain")
+        part2 = MIMEText(html_body, "html")
+        
+        message.attach(part1)
+        message.attach(part2)
+        
+        # Send email using aiosmtplib with explicit STARTTLS handling
+        # Gmail port 587 requires STARTTLS (plain connection, then upgrade to TLS)
+        # Gmail port 465 requires SSL from the start
+        if settings.SMTP_PORT == 465:
+            # Port 465: SSL/TLS from the start
+            import ssl
+            context = ssl.create_default_context()
+            smtp = aiosmtplib.SMTP(
+                hostname=settings.SMTP_HOST,
+                port=settings.SMTP_PORT,
+                use_tls=True,
+                tls_context=context,
+            )
+            await smtp.connect()
+        else:
+            # Port 587: Plain connection first, then STARTTLS
+            smtp = aiosmtplib.SMTP(
+            hostname=settings.SMTP_HOST,
+            port=settings.SMTP_PORT,
+            )
+            await smtp.connect()
+            
+            # For port 587, use STARTTLS to upgrade plain connection to TLS
+            if settings.SMTP_USE_TLS:
+                # starttls() will raise an error if already using TLS - catch and continue
+                try:
+                    await smtp.starttls()
+                except Exception as tls_error:
+                    error_msg = str(tls_error).lower()
+                    # If already using TLS, that's fine - continue
+                    if "already" in error_msg and "tls" in error_msg:
+                        logger.debug("Connection already using TLS, continuing...")
+                    else:
+                        # Re-raise if it's a different error
+                        raise
+        
+        logger.debug(f"Authenticating with SMTP server...")
+        await smtp.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+        logger.debug(f"Authentication successful, sending message...")
+        await smtp.send_message(message)
+        await smtp.quit()
+        
+        logger.info(f"Email sent successfully to {to_email}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Failed to send email to {to_email}: {str(e)}", exc_info=True)
+        return False
+
+
+async def send_login_credentials_email(
+    recipient_email: str,
+    recipient_name: str,
+    login_email: str,
+    password: str,
+    role: str,
+    organization_name: Optional[str] = None
+) -> bool:
+    """
+    Send login credentials email to a user.
+    
+    Args:
+        recipient_email: Email address to send to
+        recipient_name: Name of the recipient
+        login_email: Email used for login
+        password: Plain text password
+        role: User role (admin, employee, client)
+        organization_name: Optional organization name
+    
+    Returns:
+        True if email was sent successfully, False otherwise
+    """
+    # Determine role-specific messaging
+    role_messages = {
+        "admin": {
+            "title": "Welcome! Your Admin Account Has Been Created",
+            "description": "Your admin account has been created. You can now manage your organization and users."
+        },
+        "employee": {
+            "title": "Welcome! Your Employee Account Has Been Created",
+            "description": "Your employee account has been created. You can now access the system."
+        },
+        "client": {
+            "title": "Welcome! Your Client Portal Access Has Been Created",
+            "description": "Your client portal account has been created. You can now access your account information."
+        }
+    }
+    
+    role_info = role_messages.get(role.lower(), {
+        "title": "Welcome! Your Account Has Been Created",
+        "description": "Your account has been created. You can now access the system."
+    })
+    
+    # Build HTML email body
+    html_body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            body {{
+                font-family: Arial, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 600px;
+                margin: 0 auto;
+                padding: 20px;
+            }}
+            .header {{
+                background-color: #4CAF50;
+                color: white;
+                padding: 20px;
+                text-align: center;
+                border-radius: 5px 5px 0 0;
+            }}
+            .content {{
+                background-color: #f9f9f9;
+                padding: 30px;
+                border-radius: 0 0 5px 5px;
+            }}
+            .credentials {{
+                background-color: white;
+                border: 2px solid #4CAF50;
+                border-radius: 5px;
+                padding: 20px;
+                margin: 20px 0;
+            }}
+            .credential-item {{
+                margin: 10px 0;
+                padding: 10px;
+                background-color: #f5f5f5;
+                border-left: 4px solid #4CAF50;
+            }}
+            .label {{
+                font-weight: bold;
+                color: #666;
+                display: inline-block;
+                width: 120px;
+            }}
+            .value {{
+                color: #333;
+                font-family: monospace;
+            }}
+            .warning {{
+                background-color: #fff3cd;
+                border: 1px solid #ffc107;
+                border-radius: 5px;
+                padding: 15px;
+                margin: 20px 0;
+                color: #856404;
+            }}
+            .footer {{
+                text-align: center;
+                margin-top: 30px;
+                padding-top: 20px;
+                border-top: 1px solid #ddd;
+                color: #666;
+                font-size: 12px;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>{role_info['title']}</h1>
+        </div>
+        <div class="content">
+            <p>Dear {recipient_name},</p>
+            
+            <p>{role_info['description']}</p>
+    """
+    
+    if organization_name:
+        html_body += f'<p><strong>Organization:</strong> {organization_name}</p>'
+    
+    html_body += f"""
+            <div class="credentials">
+                <h3 style="margin-top: 0;">Your Login Credentials:</h3>
+                <div class="credential-item">
+                    <span class="label">Email:</span>
+                    <span class="value">{login_email}</span>
+                </div>
+                <div class="credential-item">
+                    <span class="label">Password:</span>
+                    <span class="value">{password}</span>
+                </div>
+            </div>
+            
+            <div class="warning">
+                <strong>⚠️ Security Notice:</strong> Please change your password after your first login for security purposes.
+            </div>
+            
+            <p>You can now log in to the system using the credentials above.</p>
+            
+            <p>If you have any questions or need assistance, please contact your administrator.</p>
+            
+            <p>Best regards,<br>
+            {settings.SMTP_FROM_NAME}</p>
+        </div>
+        <div class="footer">
+            <p>This is an automated email. Please do not reply to this message.</p>
+        </div>
+    </body>
+    </html>
+    """
+    
+    subject = role_info['title']
+    
+    return await send_email(
+        to_email=recipient_email,
+        subject=subject,
+        html_body=html_body
+    )
+
+
+
+

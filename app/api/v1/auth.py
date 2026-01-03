@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
@@ -69,6 +69,7 @@ class LoginResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+    expires_in: int  # Access token expiration time in seconds
     user: UserResponse
     organization: OrganizationResponse
 
@@ -80,11 +81,13 @@ class RefreshTokenRequest(BaseModel):
 class RefreshTokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    expires_in: int  # Access token expiration time in seconds
 
 
 @router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
 async def signup(
     signup_data: SignupRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """
@@ -139,6 +142,18 @@ async def signup(
     db.refresh(new_org)
     db.refresh(admin_user)
     
+    # Send login credentials email to admin (in background)
+    from app.core.email_service import send_login_credentials_email
+    background_tasks.add_task(
+        send_login_credentials_email,
+        recipient_email=signup_data.admin_email,
+        recipient_name=signup_data.admin_full_name or "Admin",
+        login_email=signup_data.admin_email,
+        password=signup_data.admin_password,
+        role="admin",
+        organization_name=signup_data.organization_name
+    )
+    
     return SignupResponse(
         organization=OrganizationResponse(
             id=new_org.id,
@@ -168,6 +183,8 @@ async def login(
     """
     Login endpoint that returns both access token and refresh token.
     Both tokens are guaranteed to be 1000+ characters long.
+    
+    Note: Master admin users should use /api/v1/master-admin/auth/login instead.
     """
     # Find user by email (OAuth2PasswordRequestForm uses 'username' field)
     user = db.query(User).filter(User.email == form_data.username).first()
@@ -177,6 +194,14 @@ async def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Prevent master admin from using regular login endpoint
+    # Master admins must use the dedicated master admin login endpoint
+    if user.role == UserRole.MASTER_ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Master admin users must use /api/v1/master-admin/auth/login endpoint"
         )
     
     # Revoke all existing refresh tokens for this user
@@ -222,10 +247,14 @@ async def login(
             detail="Organization not found"
         )
     
+    # Calculate expiration time in seconds
+    expires_in_seconds = int(access_token_expires.total_seconds())
+    
     return LoginResponse(
         access_token=access_token,
         refresh_token=refresh_token,
         token_type="bearer",
+        expires_in=expires_in_seconds,
         user=UserResponse(
             id=user.id,
             email=user.email,
@@ -314,8 +343,12 @@ async def refresh_token(
         min_length=1000
     )
     
+    # Calculate expiration time in seconds
+    expires_in_seconds = int(access_token_expires.total_seconds())
+    
     return RefreshTokenResponse(
         access_token=access_token,
-        token_type="bearer"
+        token_type="bearer",
+        expires_in=expires_in_seconds
     )
 

@@ -1,11 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.db.models.user import User, UserRole
 from app.db.models.organization import Organization
 from app.core.security import get_password_hash
+from app.core.email_service import send_login_credentials_email
 from pydantic import BaseModel, EmailStr
 from typing import Optional
+import logging
 
 router = APIRouter()
 
@@ -16,6 +18,7 @@ class UserCreate(BaseModel):
     full_name: Optional[str] = None
     phone: Optional[str] = None
     org_id: int
+    role: Optional[str] = "employee"  # Default to employee
 
 
 class UserResponse(BaseModel):
@@ -33,6 +36,7 @@ class UserResponse(BaseModel):
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def create_user(
     user: UserCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
     """Create a dummy user."""
@@ -52,6 +56,16 @@ def create_user(
             detail="User with this email already exists"
         )
     
+    # Validate and set role
+    try:
+        user_role = UserRole(user.role.lower()) if user.role else UserRole.EMPLOYEE
+    except ValueError:
+        valid_roles = [role.value for role in UserRole]
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid role. Valid roles are: {', '.join(valid_roles)}"
+        )
+    
     # Create user (defaults to EMPLOYEE role - admins create employees)
     db_user = User(
         email=user.email,
@@ -59,11 +73,22 @@ def create_user(
         full_name=user.full_name,
         phone=user.phone,
         org_id=user.org_id,
-        role=UserRole.EMPLOYEE
+        role=user_role
     )
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
+    
+    # Send login credentials email to user (in background)
+    background_tasks.add_task(
+        send_login_credentials_email,
+        recipient_email=user.email,
+        recipient_name=user.full_name or "User",
+        login_email=user.email,
+        password=user.password,
+        role=user_role.value,
+        organization_name=org.name
+    )
     
     return UserResponse(
         id=db_user.id,
