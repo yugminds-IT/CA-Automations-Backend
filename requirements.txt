@@ -13,4 +13,3 @@ openpyxl
 aiosmtplib
 apscheduler
 cryptography
-
