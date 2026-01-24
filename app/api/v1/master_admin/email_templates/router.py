@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 from typing import Optional, List
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, validator, ValidationError
 from app.db.session import get_db
 from app.db.models.email_template import EmailTemplate, EmailTemplateCategory, EmailTemplateType
 from app.db.models.user import User
@@ -20,29 +20,41 @@ class EmailTemplateCreate(BaseModel):
     body: str
     variables: Optional[List[str]] = None
     
-    @validator('name')
+    @validator('name', pre=True)
     def validate_name(cls, v):
-        if not v or not v.strip():
+        if v is None:
             raise ValueError('Name is required')
+        if isinstance(v, str):
+            v = v.strip()
+        if not v:
+            raise ValueError('Name cannot be empty')
         if len(v) > 255:
             raise ValueError('Name must be 255 characters or less')
-        return v.strip()
+        return v
     
-    @validator('subject')
+    @validator('subject', pre=True)
     def validate_subject(cls, v):
-        if not v or not v.strip():
+        if v is None:
             raise ValueError('Subject is required')
+        if isinstance(v, str):
+            v = v.strip()
+        if not v:
+            raise ValueError('Subject cannot be empty')
         if len(v) > 500:
             raise ValueError('Subject must be 500 characters or less')
-        return v.strip()
+        return v
     
-    @validator('body')
+    @validator('body', pre=True)
     def validate_body(cls, v):
-        if not v or not v.strip():
+        if v is None:
             raise ValueError('Body is required')
+        if isinstance(v, str):
+            v = v.strip()
+        if not v:
+            raise ValueError('Body cannot be empty')
         if len(v) > 10000:
             raise ValueError('Body must be 10000 characters or less')
-        return v.strip()
+        return v
 
 
 class EmailTemplateUpdate(BaseModel):

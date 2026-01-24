@@ -22,6 +22,7 @@ class EmailTemplateType(str, enum.Enum):
     TAX_PLANNING = "tax_planning"
     COMPLIANCES = "compliances"
     LOGIN_CREDENTIALS = "login_credentials"
+    REMINDER_DEADLINE = "reminder_deadline"
     # Add more types as needed
     OTHER = "other"
 
