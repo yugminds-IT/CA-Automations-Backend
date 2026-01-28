@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.core.config import settings
+import os
 
 # Lazy initialization for serverless environments
 _engine = None
@@ -8,12 +9,49 @@ _SessionLocal = None
 
 
 def get_engine():
-    """Get or create database engine."""
+    """Get or create database engine with environment-optimized connection pooling."""
     global _engine
     if _engine is None:
         # Convert postgres:// or postgresql:// to postgresql+psycopg:// for psycopg3
         database_url = settings.DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1).replace("postgresql://", "postgresql+psycopg://", 1)
-        _engine = create_engine(database_url, pool_pre_ping=True)
+        
+        # Detect environment type
+        is_serverless = os.getenv("VERCEL") is not None or os.getenv("AWS_LAMBDA_FUNCTION_NAME") is not None
+        environment = os.getenv("ENVIRONMENT", "development").lower()
+        
+        if is_serverless:
+            # Serverless-optimized connection pool settings
+            # Small pool to prevent connection exhaustion
+            pool_size = int(os.getenv("DB_POOL_SIZE", "2"))
+            max_overflow = int(os.getenv("DB_MAX_OVERFLOW", "0"))
+            pool_timeout = int(os.getenv("DB_POOL_TIMEOUT", "30"))
+            pool_recycle = int(os.getenv("DB_POOL_RECYCLE", "3600"))
+        elif environment == "production":
+            # Production settings - use config values (can be overridden via env vars)
+            pool_size = settings.DB_POOL_SIZE
+            max_overflow = settings.DB_MAX_OVERFLOW
+            pool_timeout = settings.DB_POOL_TIMEOUT
+            pool_recycle = settings.DB_POOL_RECYCLE
+        else:
+            # Local development settings - smaller pool for dev
+            pool_size = int(os.getenv("DB_POOL_SIZE", "5"))
+            max_overflow = int(os.getenv("DB_MAX_OVERFLOW", "5"))
+            pool_timeout = int(os.getenv("DB_POOL_TIMEOUT", "30"))
+            pool_recycle = int(os.getenv("DB_POOL_RECYCLE", "3600"))
+        
+        _engine = create_engine(
+            database_url,
+            pool_pre_ping=True,  # Verify connections before using
+            pool_size=pool_size,  # Number of connections to maintain
+            max_overflow=max_overflow,  # Max connections beyond pool_size
+            pool_timeout=pool_timeout,  # Seconds to wait for connection from pool
+            pool_recycle=pool_recycle,  # Recycle connections after this many seconds
+            echo=False,  # Set to True for SQL query logging (disable in production)
+            connect_args={
+                "connect_timeout": settings.DB_CONNECT_TIMEOUT,
+                "options": f"-c statement_timeout={settings.DB_STATEMENT_TIMEOUT * 1000}"  # Convert to milliseconds
+            }
+        )
     return _engine
 
 

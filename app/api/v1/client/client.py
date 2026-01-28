@@ -63,11 +63,14 @@ class ServiceResponse(BaseModel):
 
 
 class ClientCreate(BaseModel):
+    # Mandatory fields
     client_name: str
-    email: Optional[EmailStr] = None
-    phone_number: str
+    email: EmailStr
     company_name: str
     business_type: BusinessType
+    
+    # Optional fields
+    phone_number: Optional[str] = None
     pan_number: Optional[str] = None
     gst_number: Optional[str] = None
     status: ClientStatus = ClientStatus.ACTIVE
@@ -304,7 +307,7 @@ def create_client(
             hashed_password=get_password_hash(plain_password),
             encrypted_plain_password=encrypt_password(plain_password),  # Store encrypted plain password
             full_name=client.client_name,
-            phone=client.phone_number,
+            phone=client.phone_number or None,  # Use None if phone_number is not provided
             org_id=org_id,
             role=UserRole.CLIENT
         )
@@ -316,7 +319,7 @@ def create_client(
     db_client = Client(
         client_name=client.client_name,
         email=client.email,
-        phone_number=client.phone_number,
+        phone_number=client.phone_number or "",  # Use empty string if None (database requires non-null)
         company_name=client.company_name,
         business_type=client.business_type,
         pan_number=client.pan_number,

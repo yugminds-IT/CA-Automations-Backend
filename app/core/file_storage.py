@@ -1,5 +1,6 @@
 """
 File storage utilities for handling file uploads.
+Supports both local filesystem and S3 storage backends.
 """
 import os
 import uuid
@@ -7,6 +8,7 @@ import re
 from pathlib import Path
 from typing import Tuple
 from fastapi import UploadFile, HTTPException, status
+from app.core.config import settings
 
 
 # Maximum file size: 50MB
@@ -102,7 +104,7 @@ def validate_file_size(file_size: int) -> None:
 
 async def save_uploaded_file(file: UploadFile, user_id: int, organization_id: int) -> Tuple[str, str, str, int]:
     """
-    Save an uploaded file to disk.
+    Save an uploaded file using the configured storage backend (local or S3).
     
     Args:
         file: FastAPI UploadFile object
@@ -110,98 +112,118 @@ async def save_uploaded_file(file: UploadFile, user_id: int, organization_id: in
         organization_id: ID of the organization
         
     Returns:
-        Tuple of (file_path, stored_filename, file_type, file_size)
+        Tuple of (file_path_or_key, stored_filename, file_type, file_size)
+        - For local: file_path is the full file path
+        - For S3: file_path is the S3 key
         
     Raises:
         HTTPException: If file cannot be saved
     """
-    # Read file content
-    content = await file.read()
-    file_size = len(content)
-    
-    # Validate file size
-    validate_file_size(file_size)
-    
-    # Generate unique filename
-    stored_filename, ext = generate_unique_filename(file.filename or "file")
-    
-    # Create organization-specific directory structure: uploads/org_{org_id}/user_{user_id}/
-    upload_dir = get_upload_directory()
-    org_user_dir = upload_dir / f"org_{organization_id}" / f"user_{user_id}"
-    org_user_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Full file path
-    file_path = org_user_dir / stored_filename
-    
-    # Write file to disk
-    try:
-        with open(file_path, "wb") as f:
-            f.write(content)
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to save file: {str(e)}"
-        )
-    
-    # Get file type
-    file_type = file.content_type or "application/octet-stream"
-    
-    return str(file_path), stored_filename, file_type, file_size
+    # Use S3 if configured, otherwise use local storage
+    if settings.FILE_STORAGE_BACKEND == "s3":
+        from app.core.s3_storage import save_file_to_s3
+        return await save_file_to_s3(file, user_id, organization_id)
+    else:
+        # Local filesystem storage
+        # Read file content
+        content = await file.read()
+        file_size = len(content)
+        
+        # Validate file size
+        validate_file_size(file_size)
+        
+        # Generate unique filename
+        stored_filename, ext = generate_unique_filename(file.filename or "file")
+        
+        # Create organization-specific directory structure: uploads/org_{org_id}/user_{user_id}/
+        upload_dir = get_upload_directory()
+        org_user_dir = upload_dir / f"org_{organization_id}" / f"user_{user_id}"
+        org_user_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Full file path
+        file_path = org_user_dir / stored_filename
+        
+        # Write file to disk
+        try:
+            with open(file_path, "wb") as f:
+                f.write(content)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to save file: {str(e)}"
+            )
+        
+        # Get file type
+        file_type = file.content_type or "application/octet-stream"
+        
+        return str(file_path), stored_filename, file_type, file_size
 
 
-def delete_file(file_path: str) -> None:
+def delete_file(file_path_or_key: str) -> None:
     """
-    Delete a file from disk.
+    Delete a file using the configured storage backend.
     
     Args:
-        file_path: Path to the file to delete
+        file_path_or_key: For local: file path, For S3: S3 key
         
     Raises:
         HTTPException: If file cannot be deleted
     """
-    try:
-        path = Path(file_path)
-        if path.exists():
-            path.unlink()
-            # Try to remove empty parent directories
-            try:
-                path.parent.rmdir()
-                # Try to remove org directory if empty
+    if settings.FILE_STORAGE_BACKEND == "s3":
+        from app.core.s3_storage import delete_file_from_s3
+        delete_file_from_s3(file_path_or_key)
+    else:
+        # Local filesystem storage
+        try:
+            path = Path(file_path_or_key)
+            if path.exists():
+                path.unlink()
+                # Try to remove empty parent directories
                 try:
-                    path.parent.parent.rmdir()
+                    path.parent.rmdir()
+                    # Try to remove org directory if empty
+                    try:
+                        path.parent.parent.rmdir()
+                    except OSError:
+                        pass  # Directory not empty, ignore
                 except OSError:
                     pass  # Directory not empty, ignore
-            except OSError:
-                pass  # Directory not empty, ignore
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete file: {str(e)}"
-        )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to delete file: {str(e)}"
+            )
 
 
-def get_file_url(file_path: str, stored_filename: str) -> str:
+def get_file_url(file_path_or_key: str, stored_filename: str) -> str:
     """
     Generate access URL for a file.
     
     Args:
-        file_path: Full file path
+        file_path_or_key: For local: full file path, For S3: S3 key
         stored_filename: Stored filename
         
     Returns:
         Access URL for the file
     """
-    # Extract relative path from uploads directory
-    path = Path(file_path)
-    upload_dir = get_upload_directory()
-    
-    try:
-        # Get relative path from uploads directory
-        relative_path = path.relative_to(upload_dir)
-        # Convert to URL path (use forward slashes)
-        url_path = f"/uploads/{str(relative_path).replace(os.sep, '/')}"
-        return url_path
-    except ValueError:
-        # If file is not in uploads directory, use stored filename
-        return f"/uploads/{stored_filename}"
+    if settings.FILE_STORAGE_BACKEND == "s3":
+        from app.core.s3_storage import get_s3_file_url
+        # For S3, return presigned URL (expires in 1 hour)
+        # In production, you might want to use a CDN URL instead
+        return get_s3_file_url(file_path_or_key, expires_in=3600)
+    else:
+        # Local filesystem storage
+        # Extract relative path from uploads directory
+        path = Path(file_path_or_key)
+        upload_dir = get_upload_directory()
+        
+        try:
+            # Get relative path from uploads directory
+            relative_path = path.relative_to(upload_dir)
+            # Convert to URL path (use forward slashes)
+            url_path = f"/uploads/{str(relative_path).replace(os.sep, '/')}"
+            return url_path
+        except ValueError:
+            # If file is not in uploads directory, use stored filename
+            return f"/uploads/{stored_filename}"
 

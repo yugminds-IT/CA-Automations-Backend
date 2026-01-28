@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sample Email Template</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f5;
+            line-height: 1.6;
+        }
+        .email-container {
+            max-width: 600px;
+            margin: 40px auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .email-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+        .email-header h1 {
+            margin: 0;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        .email-body {
+            padding: 40px 30px;
+            color: #333333;
+        }
+        .email-body h2 {
+            color: #667eea;
+            margin-top: 0;
+        }
+        .email-body p {
+            margin: 16px 0;
+            line-height: 1.8;
+        }
+        .button {
+            display: inline-block;
+            padding: 12px 30px;
+            background-color: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-weight: 500;
+        }
+        .button:hover {
+            background-color: #5568d3;
+        }
+        .info-box {
+            background-color: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .email-footer {
+            background-color: #f8f9fa;
+            padding: 30px;
+            text-align: center;
+            color: #666666;
+            font-size: 14px;
+            border-top: 1px solid #e5e5e5;
+        }
+        .email-footer p {
+            margin: 8px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="email-header">
+            <h1>Welcome to CAA Platform</h1>
+        </div>
+        
+        <div class="email-body">
+            <h2>Hello {{client_name}},</h2>
+            
+            <p>Thank you for using our Chartered Accountancy Automation platform. This is a sample email template to demonstrate the email functionality.</p>
+            
+            <div class="info-box">
+                <strong>Important Information:</strong>
+                <ul>
+                    <li>Your account has been successfully created</li>
+                    <li>You can now access all platform features</li>
+                    <li>If you have any questions, please contact support</li>
+                </ul>
+            </div>
+            
+            <p>Here are your login credentials:</p>
+            <div class="info-box">
+                <p><strong>Email:</strong> {{login_email}}</p>
+                <p><strong>Password:</strong> {{login_password}}</p>
+            </div>
+            
+            <p>Please click the button below to access your account:</p>
+            <a href="{{login_url}}" class="button">Access Your Account</a>
+            
+            <p>If you have any questions or need assistance, feel free to reach out to us.</p>
+            
+            <p>Best regards,<br>
+            <strong>{{organization_name}}</strong></p>
+        </div>
+        
+        <div class="email-footer">
+            <p><strong>{{organization_name}}</strong></p>
+            <p>This is an automated email. Please do not reply directly to this message.</p>
+            <p>© 2024 CAA Platform. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -26,7 +26,8 @@ async def send_email(
     to_email: str,
     subject: str,
     html_body: str,
-    plain_body: Optional[str] = None
+    plain_body: Optional[str] = None,
+    from_name: Optional[str] = None
 ) -> bool:
     """
     Send an email using SMTP.
@@ -36,6 +37,7 @@ async def send_email(
         subject: Email subject
         html_body: HTML email body
         plain_body: Plain text email body (optional, auto-generated from HTML if not provided)
+        from_name: Sender name (optional, defaults to SMTP_FROM_NAME from settings)
     
     Returns:
         True if email was sent successfully, False otherwise
@@ -47,10 +49,13 @@ async def send_email(
     try:
         logger.debug(f"Preparing email to {to_email} with subject: {subject[:50]}...")
         
+        # Use provided from_name or fall back to settings
+        sender_name = from_name or settings.SMTP_FROM_NAME
+        
         # Create message
         message = MIMEMultipart("alternative")
         message["Subject"] = subject
-        message["From"] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_FROM_EMAIL}>"
+        message["From"] = f"{sender_name} <{settings.SMTP_FROM_EMAIL}>"
         message["To"] = to_email
         
         # Create plain text version if not provided
@@ -68,24 +73,53 @@ async def send_email(
         message.attach(part2)
         
         # Send email using aiosmtplib with explicit STARTTLS handling
-        # Gmail port 587 requires STARTTLS (plain connection, then upgrade to TLS)
-        # Gmail port 465 requires SSL from the start
+        # Hostinger/Gmail port 587 requires STARTTLS (plain connection, then upgrade to TLS)
+        # Hostinger/Gmail port 465 requires SSL from the start
+        # Use configurable timeout (default 30 seconds, increase if experiencing timeouts)
+        smtp_timeout = settings.SMTP_TIMEOUT
+        import ssl
+        
+        # Try to connect based on port
         if settings.SMTP_PORT == 465:
-            # Port 465: SSL/TLS from the start
-            import ssl
+            # Port 465: SSL/TLS from the start (SMTPS)
+            # Create SSL context with relaxed settings for some SMTP servers
             context = ssl.create_default_context()
-            smtp = aiosmtplib.SMTP(
-                hostname=settings.SMTP_HOST,
-                port=settings.SMTP_PORT,
-                use_tls=True,
-                tls_context=context,
-            )
-            await smtp.connect()
+            # Some SMTP servers need these settings
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+            
+            try:
+                smtp = aiosmtplib.SMTP(
+                    hostname=settings.SMTP_HOST,
+                    port=settings.SMTP_PORT,
+                    use_tls=True,
+                    tls_context=context,
+                    timeout=smtp_timeout,
+                )
+                await smtp.connect()
+                logger.debug(f"Connected to {settings.SMTP_HOST}:{settings.SMTP_PORT} using SSL")
+            except Exception as e:
+                error_msg = str(e).lower()
+                if "timeout" in error_msg or "timed out" in error_msg:
+                    logger.warning(f"Port 465 connection timed out. Trying port 587 as fallback...")
+                    # Fallback to port 587
+                    smtp = aiosmtplib.SMTP(
+                        hostname=settings.SMTP_HOST,
+                        port=587,
+                        timeout=smtp_timeout,
+                    )
+                    await smtp.connect()
+                    if settings.SMTP_USE_TLS:
+                        await smtp.starttls()
+                    logger.debug(f"Connected to {settings.SMTP_HOST}:587 using STARTTLS (fallback)")
+                else:
+                    raise
         else:
             # Port 587: Plain connection first, then STARTTLS
             smtp = aiosmtplib.SMTP(
-            hostname=settings.SMTP_HOST,
-            port=settings.SMTP_PORT,
+                hostname=settings.SMTP_HOST,
+                port=settings.SMTP_PORT,
+                timeout=smtp_timeout,
             )
             await smtp.connect()
             
@@ -113,7 +147,31 @@ async def send_email(
         return True
         
     except Exception as e:
+        error_msg = str(e).lower()
         logger.error(f"Failed to send email to {to_email}: {str(e)}", exc_info=True)
+        
+        # Provide helpful error messages for common issues
+        if "timeout" in error_msg or "timed out" in error_msg:
+            logger.error(
+                f"SMTP connection timeout. Try: "
+                f"1) Use port 465 instead of 587 (set SMTP_PORT=465 in .env), "
+                f"2) Increase SMTP_TIMEOUT (current: {settings.SMTP_TIMEOUT}s), "
+                f"3) Check firewall/network settings"
+            )
+        elif "connection" in error_msg or "refused" in error_msg:
+            logger.error(
+                f"SMTP connection failed. Check: "
+                f"1) SMTP_HOST is correct (current: {settings.SMTP_HOST}), "
+                f"2) SMTP_PORT is correct (current: {settings.SMTP_PORT}), "
+                f"3) Firewall allows outbound connections on port {settings.SMTP_PORT}"
+            )
+        elif "authentication" in error_msg or "login" in error_msg:
+            logger.error(
+                f"SMTP authentication failed. Check: "
+                f"1) SMTP_USER is correct (current: {settings.SMTP_USER}), "
+                f"2) SMTP_PASSWORD is correct"
+            )
+        
         return False
 
 
@@ -123,7 +181,8 @@ async def send_login_credentials_email(
     login_email: str,
     password: str,
     role: str,
-    organization_name: Optional[str] = None
+    organization_name: Optional[str] = None,
+    from_name: Optional[str] = None
 ) -> bool:
     """
     Send login credentials email to a user.
@@ -135,6 +194,7 @@ async def send_login_credentials_email(
         password: Plain text password
         role: User role (admin, employee, client)
         organization_name: Optional organization name
+        from_name: Sender name (optional, defaults to SMTP_FROM_NAME from settings)
     
     Returns:
         True if email was sent successfully, False otherwise
@@ -263,7 +323,7 @@ async def send_login_credentials_email(
             <p>If you have any questions or need assistance, please contact your administrator.</p>
             
             <p>Best regards,<br>
-            {settings.SMTP_FROM_NAME}</p>
+            {from_name or settings.SMTP_FROM_NAME}</p>
         </div>
         <div class="footer">
             <p>This is an automated email. Please do not reply to this message.</p>
@@ -277,7 +337,8 @@ async def send_login_credentials_email(
     return await send_email(
         to_email=recipient_email,
         subject=subject,
-        html_body=html_body
+        html_body=html_body,
+        from_name=from_name
     )
 
 

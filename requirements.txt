@@ -13,3 +13,4 @@ openpyxl
 aiosmtplib
 apscheduler
 cryptography
+boto3

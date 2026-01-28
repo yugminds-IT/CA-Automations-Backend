@@ -7,17 +7,30 @@ from app.api.v1.master_admin import router as master_admin_router
 from app.api.v1.email_templates import router as email_templates_router
 from app.api.v1 import test_email
 from app.core.email_scheduler import start_scheduler, stop_scheduler
+from app.core.config import settings
 
 app = FastAPI(title="Backend CAA API", version="1.0.0")
 
-# Add CORS middleware - allow everything for development
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Configure CORS based on environment
+if settings.ENVIRONMENT == "production" and settings.CORS_ORIGINS:
+    # Production: Use specific origins from config
+    allowed_origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",")]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    # Development/Staging: Allow all origins (less secure, but convenient for dev)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Add tenant middleware
 app.add_middleware(TenantMiddleware)

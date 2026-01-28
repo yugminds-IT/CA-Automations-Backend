@@ -14,7 +14,9 @@ from app.db.models.user import User, UserRole
 from app.db.models.organization import Organization
 from app.db.models.client import Client
 from app.core.file_storage import save_uploaded_file, delete_file, get_file_url
+from app.core.config import settings
 from app.core.security import decode_access_token
+from app.core.s3_storage import create_s3_folder
 
 
 router = APIRouter()
@@ -319,20 +321,39 @@ def download_file(
             detail="Access denied. File does not belong to your organization."
         )
     
-    # Check if file exists on disk
-    file_path = Path(db_file.file_path)
-    if not file_path.exists():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="File not found on disk"
+    # Handle S3 or local storage
+    if settings.FILE_STORAGE_BACKEND == "s3":
+        from app.core.s3_storage import get_s3_file_stream
+        try:
+            # Get file stream from S3
+            file_stream = get_s3_file_stream(db_file.file_path)  # file_path contains S3 key
+            return StreamingResponse(
+                file_stream.iter_chunks(chunk_size=8192),
+                media_type=db_file.file_type,
+                headers={
+                    "Content-Disposition": f'inline; filename="{db_file.filename}"'
+                }
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to retrieve file from S3: {str(e)}"
+            )
+    else:
+        # Local filesystem storage
+        file_path = Path(db_file.file_path)
+        if not file_path.exists():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="File not found on disk"
+            )
+        
+        # Return file with appropriate headers for preview/download
+        return FileResponse(
+            path=str(file_path),
+            filename=db_file.filename,
+            media_type=db_file.file_type
         )
-    
-    # Return file with appropriate headers for preview/download
-    return FileResponse(
-        path=str(file_path),
-        filename=db_file.filename,
-        media_type=db_file.file_type
-    )
 
 
 @router.delete("/{file_id}", status_code=status.HTTP_200_OK)
@@ -384,4 +405,65 @@ def delete_file_endpoint(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete file: {str(e)}"
+        )
+
+
+class CreateFolderRequest(BaseModel):
+    folder_name: str
+    parent_path: Optional[str] = None  # Optional parent folder path
+
+
+@router.post("/folders", status_code=status.HTTP_201_CREATED)
+def create_folder(
+    folder_data: CreateFolderRequest,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Create a folder in S3 storage.
+    
+    Only works when FILE_STORAGE_BACKEND=s3.
+    Folders are automatically created when uploading files, but this endpoint
+    allows creating empty folders for organization.
+    
+    Example folder paths:
+    - "documents" → creates "org_1/user_1/documents/"
+    - "invoices/2024" → creates "org_1/user_1/invoices/2024/"
+    - "reports" → creates "org_1/user_1/reports/"
+    """
+    # Get user ID and org ID from token
+    user_id, org_id = get_current_user_id(request)
+    
+    # Only works with S3 storage
+    if settings.FILE_STORAGE_BACKEND != "s3":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Folder creation is only available when using S3 storage backend"
+        )
+    
+    # Build folder path
+    if folder_data.parent_path:
+        folder_path = f"{folder_data.parent_path}/{folder_data.folder_name}"
+    else:
+        folder_path = folder_data.folder_name
+    
+    try:
+        # Import here to avoid circular imports
+        from app.core.s3_storage import create_s3_folder
+        
+        # Create folder in S3
+        s3_key = create_s3_folder(folder_path, organization_id=org_id, user_id=user_id)
+        
+        return {
+            "message": "Folder created successfully",
+            "folder_path": folder_path,
+            "s3_key": s3_key,
+            "full_path": s3_key
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create folder: {str(e)}"
         )

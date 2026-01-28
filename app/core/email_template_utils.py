@@ -2,6 +2,7 @@
 Utility functions for email template variable replacement.
 """
 import re
+import html
 from datetime import datetime, date
 from typing import Dict, Any, Optional, Tuple
 from app.db.models.client import Client
@@ -47,6 +48,8 @@ def replace_template_variables(
     
     Date variables:
     - {{current_date}} → current date (YYYY-MM-DD format)
+    - {{date}} → current date (YYYY-MM-DD format, alias for current_date)
+    - {{today}} → current date (YYYY-MM-DD format, alias for current_date)
     - {{current_datetime}} → current datetime
     - {{scheduled_date}} → scheduled_date (YYYY-MM-DD format)
     - {{deadline_date}} → deadline_date (YYYY-MM-DD format)
@@ -115,6 +118,8 @@ def replace_template_variables(
         
         # Date variables
         "current_date": date.today().strftime("%Y-%m-%d"),
+        "date": date.today().strftime("%Y-%m-%d"),  # Alias for current_date
+        "today": date.today().strftime("%Y-%m-%d"),  # Alias for current_date
         "current_datetime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         
         # Login credentials
@@ -150,42 +155,96 @@ def replace_template_variables(
     subject = replace_variables_in_text(template.subject, variables)
     body = replace_variables_in_text(template.body, variables)
     
-    # Convert newlines to HTML line breaks for HTML emails
-    # Replace \n with <br> for HTML rendering
-    body = body.replace('\n', '<br>')
-    # Also handle \r\n (Windows line endings)
-    body = body.replace('\r\n', '<br>')
-    # Replace multiple consecutive <br> with single <br>
-    import re
-    body = re.sub(r'<br>\s*<br>', '<br>', body)
-    
-    # Wrap body in basic HTML structure if it's not already HTML
-    # Check if body already contains HTML tags
-    if not re.search(r'<[a-z][\s\S]*>', body, re.IGNORECASE):
-        # Wrap in basic HTML structure
-        body = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <style>
-        body {{
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 20px;
-        }}
-    </style>
-</head>
-<body>
-{body}
-</body>
-</html>
-"""
+    # Wrap body in professional HTML email template with organization name
+    body = wrap_email_in_html_template(body, organization_name=organization.name or "Navedhana Private Limited")
     
     return subject, body
+
+
+def wrap_email_in_html_template(body_content: str, organization_name: str = "Navedhana Private Limited") -> str:
+    """
+    Wrap email body in professional HTML template.
+    
+    This function:
+    1. Checks if content already has HTML tags
+    2. If plain text, converts to HTML paragraphs
+    3. Wraps everything in a professional HTML email template
+    
+    Args:
+        body_content: Email body content (plain text or HTML)
+        organization_name: Name of the organization sending the email (default: "Navedhana Private Limited")
+        
+    Returns:
+        Complete HTML email with professional formatting
+    """
+    if not body_content:
+        body_content = ""
+    
+    # Check if content already has HTML tags
+    has_html = bool(re.search(r'<[a-z][\s\S]*>', body_content, re.IGNORECASE))
+    
+    if has_html:
+        # Content already has HTML, use it as-is
+        formatted_content = body_content
+    else:
+        # Convert plain text to HTML paragraphs
+        # Split by newlines and create paragraphs
+        lines = [line.strip() for line in body_content.split('\n') if line.strip()]
+        
+        if not lines:
+            formatted_content = "<p style=\"margin: 0 0 16px 0; line-height: 1.6; color: #333333;\"></p>"
+        else:
+            formatted_content = ''.join([
+                f'<p style="margin: 0 0 16px 0; line-height: 1.6; color: #333333;">{html.escape(line)}</p>'
+                for line in lines
+            ])
+    
+    # Wrap in professional HTML email template
+    html_template = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5; line-height: 1.6;">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f5f5f5; padding: 40px 0;">
+    <tr>
+      <td align="center" style="padding: 0;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="padding: 40px 40px 30px 40px; background-color: #ffffff; border-radius: 8px 8px 0 0;">
+              <div style="text-align: center;">
+                <h1 style="margin: 0; font-size: 24px; font-weight: 600; color: #1a1a1a; letter-spacing: -0.5px;">{html.escape(organization_name)}</h1>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 0 40px 40px 40px; background-color: #ffffff;">
+              <div style="color: #333333; font-size: 16px; line-height: 1.6;">
+                {formatted_content}
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 30px 40px; background-color: #f9f9f9; border-radius: 0 0 8px 8px; border-top: 1px solid #e5e5e5;">
+              <div style="text-align: center; color: #666666; font-size: 14px; line-height: 1.5;">
+                <p style="margin: 0 0 8px 0;">Best regards,</p>
+                <p style="margin: 0; font-weight: 500; color: #333333;">{html.escape(organization_name)}</p>
+                <p style="margin: 12px 0 0 0; font-size: 12px; color: #999999;">
+                  This is an automated email. Please do not reply directly to this message.
+                </p>
+              </div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"""
+    
+    return html_template
 
 
 def replace_variables_in_text(text: str, variables: Dict[str, Any]) -> str:
