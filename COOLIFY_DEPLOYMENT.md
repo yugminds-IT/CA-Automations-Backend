@@ -5,27 +5,66 @@
 1. Coolify instance running
 2. PostgreSQL database (can be created in Coolify or external)
 3. Domain name (optional, for custom domain)
+4. GitHub repo cloned/connected — **you've done this ✓**
 
-## Step 1: Create New Resource in Coolify
+### Quick checklist (order of operations)
 
-1. Go to your Coolify dashboard
-2. Click "New Resource" → "Application"
-3. Connect your Git repository or upload code
+1. **General & Build** — Fill the form (Step 1 below).
+2. **Environment variables** — Add required env vars (Step 3).
+3. **PostgreSQL** — Create a DB in Coolify or use an external one; set `DATABASE_URL`.
+4. **Port** — Set port **8000** in the application settings.
+5. **Deploy** — Trigger deployment and run migrations (handled by `start.sh`).
 
-## Step 2: Configure Build Settings
+---
 
-### Build Pack: Docker
-- Coolify will automatically detect the Dockerfile
+## Step 1: Coolify UI — General & Build (form-by-form)
 
-### Build Command (if needed):
-```bash
-docker build -t backend-caa .
-```
+After adding your GitHub repo as a new **Application**, use these values in the Coolify form.
 
-### Start Command:
-```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
+### General
+
+| Field | Value |
+|-------|--------|
+| **Name** | `ca-backend` |
+| **Description** | e.g. `CAA Backend API` (optional) |
+| **Build Pack** | **Dockerfile** *(not Nixpacks)* — the project has a `Dockerfile` |
+| **Is it a static site?** | No |
+| **Domains** | `https://ca-api.navedhana.com` |
+| **Generate Domain** | Use if you want Coolify to suggest a domain |
+| **Direction** | Allow www & non-www (or your preference) |
+| **Docker Registry** | Leave empty unless you push to a registry |
+| **Docker Image** | Empty |
+| **Docker Image Tag** | Empty |
+
+### Build
+
+| Field | Value |
+|-------|--------|
+| **Install Command** | *(leave empty)* — Docker handles install |
+| **Build Command** | *(leave empty)* — Dockerfile defines build |
+| **Start Command** | *(leave empty)* — `Dockerfile` `CMD` uses `start.sh` |
+| **Base Directory** | `/` |
+| **Publish Directory** | `/` |
+| **Watch Paths** | *(leave empty)* |
+
+**Important:** With **Build Pack = Dockerfile**, Coolify builds from the repo `Dockerfile`. Install/build/start are defined there; you don't need to set them in the form.
+
+### Port
+
+- Set **Port** to **8000** (FastAPI runs on 8000; Coolify will map the domain to it).
+
+---
+
+## Step 2: Configure Build Settings (reference)
+
+### Build Pack: Dockerfile
+- Coolify uses the `Dockerfile` in the repo root.
+- The image runs `start.sh`, which runs migrations then `uvicorn`.
+
+### What the Dockerfile does
+- Builds a Python 3.12 image, installs deps, copies app code.
+- `start.sh`: **wait for DB** → **migrations with retries** → `uvicorn app.main:app --host 0.0.0.0 --port 8000`
+- Exposes port **8000**. Healthcheck hits `/health` (120s start-period to allow DB wait + migrations).
 
 ## Step 3: Environment Variables
 
@@ -50,16 +89,31 @@ REFRESH_TOKEN_EXPIRE_DAYS=30
 ALGORITHM=HS256
 ```
 
-### Database Connection Pool (for 100+ concurrent requests)
+### Database connection pool (optional)
+
+Defaults (10+5) are suitable for most deployments. Override for high traffic:
 
 ```env
-# Production settings for high traffic
-DB_POOL_SIZE=20
-DB_MAX_OVERFLOW=10
+DB_POOL_SIZE=10
+DB_MAX_OVERFLOW=5
 DB_POOL_TIMEOUT=30
 DB_POOL_RECYCLE=3600
-DB_CONNECT_TIMEOUT=10
-DB_STATEMENT_TIMEOUT=30
+DB_CONNECT_TIMEOUT=15
+DB_STATEMENT_TIMEOUT=60
+```
+
+For 100+ concurrent requests: `DB_POOL_SIZE=20`, `DB_MAX_OVERFLOW=10`.
+
+### Startup tuning (optional)
+
+If the app restarts while the DB is still coming up, increase wait/retry:
+
+```env
+DB_WAIT_MAX_ATTEMPTS=30
+DB_WAIT_DELAY_SECONDS=2
+DB_WAIT_CONNECT_TIMEOUT=5
+MIGRATION_MAX_ATTEMPTS=5
+MIGRATION_RETRY_DELAY_SECONDS=5
 ```
 
 ### Email Configuration
@@ -100,14 +154,7 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 
 ### Run Migrations
 
-After deployment, run database migrations:
-
-```bash
-# SSH into your Coolify container or use Coolify's terminal
-alembic upgrade head
-```
-
-Or add a startup script that runs migrations automatically.
+Migrations run automatically on every container start via `start.sh` (after waiting for the DB and with retries). No manual step needed.
 
 ## Step 6: Configure Port
 
@@ -147,39 +194,51 @@ Set appropriate resource limits in Coolify:
 
 ## Step 11: Environment-Specific Settings
 
-### For Production:
+### For production
 ```env
 ENVIRONMENT=production
-DB_POOL_SIZE=20
-DB_MAX_OVERFLOW=10
 ```
+Override `DB_POOL_SIZE` / `DB_MAX_OVERFLOW` only if you need more connections.
 
-### For Staging:
+### For staging
 ```env
 ENVIRONMENT=staging
-DB_POOL_SIZE=10
-DB_MAX_OVERFLOW=5
 ```
 
 ## Troubleshooting
 
-### Database Connection Issues
-- Verify `DATABASE_URL` is correct
-- Check database firewall rules
-- Ensure database is accessible from Coolify server
+### Continuous restarts / "No server available"
 
-### Port Issues
-- Ensure port 8000 is exposed in Dockerfile
-- Check Coolify port mapping
+Usually the app exits before it can serve traffic (often DB-related). The image is now optimized for this:
 
-### Migration Issues
-- Run migrations manually: `alembic upgrade head`
-- Check database permissions
+1. **Check logs** in Coolify (Deployments → view log). Look for:
+   - `wait_for_db: ... failed` → DB not reachable. Verify `DATABASE_URL`, DB running, and network/firewall.
+   - `Migrations failed after N attempts` → DB reachable but migrations failing. Check DB user permissions, disk space, or run `alembic upgrade head` manually in a one-off container to see the error.
+   - `Missing required environment variables` → Set `DATABASE_URL` and `SECRET_KEY` in Coolify env.
 
-### Email Not Sending
-- Verify SMTP credentials
-- Check SMTP port (587 for TLS, 465 for SSL)
-- Test with a test email endpoint
+2. **Ensure DB is up first.** If the app and Postgres start together, the app waits for the DB (see `DB_WAIT_*` env vars). If the DB takes longer than ~60s, increase `DB_WAIT_MAX_ATTEMPTS` and/or `DB_WAIT_DELAY_SECONDS`.
+
+3. **Port**: Coolify must use **8000** as the application port. The container exposes 8000 and the healthcheck uses it.
+
+4. **Healthcheck**: The container has a 120s start-period. If startup (DB wait + migrations) regularly exceeds that, increase `MIGRATION_RETRY_DELAY_SECONDS` or fix migration slowness.
+
+### Database connection issues
+- Verify `DATABASE_URL` is correct (include `postgresql://` or `postgres://`, and that the host is the **internal** DB hostname/IP Coolify uses, not `localhost`, unless DB runs in same stack).
+- Check database firewall rules and that the DB is reachable from the app container.
+- For Coolify Postgres: use the `DATABASE_URL` (or equivalent) that Coolify provides for the linked DB.
+
+### Port issues
+- Ensure port **8000** is set in Coolify for this application.
+- The Dockerfile exposes 8000; the app binds `0.0.0.0:8000`.
+
+### Migration issues
+- Migrations run automatically on startup. If they keep failing, run them manually: open a shell in the container (or a one-off) and run `alembic upgrade head` to see the traceback.
+- Check DB user permissions (CREATE, ALTER, etc.) and that the schema exists.
+
+### Email not sending
+- Verify SMTP credentials and that they’re set in env.
+- Check SMTP port (587 for TLS, 465 for SSL).
+- Scheduler startup failures are non-fatal; the API still runs. Check logs for scheduler warnings.
 
 ## Monitoring
 

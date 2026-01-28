@@ -14,12 +14,12 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30  # Default: 30 days - set in .env to override
     
     # Database connection pool settings (for production scalability)
-    DB_POOL_SIZE: int = 20  # Base connection pool size (set in .env for production)
-    DB_MAX_OVERFLOW: int = 10  # Additional connections under load (set in .env for production)
+    DB_POOL_SIZE: int = 10  # Base pool size (override via env for high traffic)
+    DB_MAX_OVERFLOW: int = 5  # Extra connections under load (override via env)
     DB_POOL_TIMEOUT: int = 30  # Seconds to wait for connection from pool
     DB_POOL_RECYCLE: int = 3600  # Recycle connections after 1 hour
-    DB_CONNECT_TIMEOUT: int = 10  # Connection timeout in seconds
-    DB_STATEMENT_TIMEOUT: int = 30  # Statement timeout in seconds
+    DB_CONNECT_TIMEOUT: int = 15  # Connection timeout (generous for cold start)
+    DB_STATEMENT_TIMEOUT: int = 60  # Statement timeout in seconds
     
     # Email settings (optional - email sending will be disabled if not configured)
     # Hostinger SMTP settings:

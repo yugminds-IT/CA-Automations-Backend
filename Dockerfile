@@ -31,9 +31,9 @@ RUN chmod +x /app/start.sh
 # Expose port (Coolify will map this)
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+# Health check: generous start-period for DB wait + migrations; then poll every 30s
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Run the application with startup script (runs migrations automatically)
+# Run the application with startup script (wait for DB, migrations, then uvicorn)
 CMD ["/app/start.sh"]

@@ -39,18 +39,22 @@ def get_engine():
             pool_timeout = int(os.getenv("DB_POOL_TIMEOUT", "30"))
             pool_recycle = int(os.getenv("DB_POOL_RECYCLE", "3600"))
         
+        connect_args = {
+            "connect_timeout": settings.DB_CONNECT_TIMEOUT,
+        }
+        # statement_timeout via options (skip if using PgBouncer; set in DB otherwise)
+        if settings.DB_STATEMENT_TIMEOUT > 0:
+            connect_args["options"] = f"-c statement_timeout={settings.DB_STATEMENT_TIMEOUT * 1000}"
+
         _engine = create_engine(
             database_url,
             pool_pre_ping=True,  # Verify connections before using
-            pool_size=pool_size,  # Number of connections to maintain
-            max_overflow=max_overflow,  # Max connections beyond pool_size
-            pool_timeout=pool_timeout,  # Seconds to wait for connection from pool
-            pool_recycle=pool_recycle,  # Recycle connections after this many seconds
-            echo=False,  # Set to True for SQL query logging (disable in production)
-            connect_args={
-                "connect_timeout": settings.DB_CONNECT_TIMEOUT,
-                "options": f"-c statement_timeout={settings.DB_STATEMENT_TIMEOUT * 1000}"  # Convert to milliseconds
-            }
+            pool_size=pool_size,
+            max_overflow=max_overflow,
+            pool_timeout=pool_timeout,
+            pool_recycle=pool_recycle,
+            echo=False,
+            connect_args=connect_args,
         )
     return _engine
 
