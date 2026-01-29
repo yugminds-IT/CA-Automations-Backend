@@ -18,10 +18,10 @@ def _get_missing() -> List[str]:
         missing.append("SMTP_HOST")
     if not (settings.SMTP_USER or "").strip():
         missing.append("SMTP_USER")
-    if not (settings.SMTP_PASSWORD or "").strip():
-        missing.append("SMTP_PASSWORD")
-    if not (settings.SMTP_FROM_EMAIL or "").strip():
-        missing.append("SMTP_FROM_EMAIL")
+    if not (settings.SMTP_PASS or "").strip():
+        missing.append("SMTP_PASS")
+    if not (settings.SMTP_FROM or "").strip():
+        missing.append("SMTP_FROM")
     return missing
 
 
@@ -78,7 +78,7 @@ async def send_email(
         # Create message
         message = MIMEMultipart("alternative")
         message["Subject"] = subject
-        message["From"] = f"{sender_name} <{settings.SMTP_FROM_EMAIL}>"
+        message["From"] = f"{sender_name} <{settings.SMTP_FROM}>"
         message["To"] = to_email
         
         # Create plain text version if not provided
@@ -132,7 +132,7 @@ async def send_email(
                         timeout=smtp_timeout,
                     )
                     await smtp.connect()
-                    if settings.SMTP_USE_TLS:
+                    if settings.SMTP_SECURE:
                         await smtp.starttls()
                     logger.info("SMTP connected to %s:587 STARTTLS (fallback from 465)", settings.SMTP_HOST)
                 else:
@@ -147,7 +147,7 @@ async def send_email(
             await smtp.connect()
             
             # For port 587, use STARTTLS to upgrade plain connection to TLS
-            if settings.SMTP_USE_TLS:
+            if settings.SMTP_SECURE:
                 # In production, use relaxed SSL context to avoid cert verification failures
                 # (e.g. minimal CA bundle in Docker, different trust store)
                 starttls_context = None
@@ -164,7 +164,7 @@ async def send_email(
                     else:
                         raise
         
-        await smtp.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+        await smtp.login(settings.SMTP_USER, settings.SMTP_PASS)
         await smtp.send_message(message)
         await smtp.quit()
 
@@ -190,7 +190,7 @@ async def send_email(
             )
         elif "authentication" in err_lower or "login" in err_lower:
             logger.error(
-                "SMTP auth failed. Check SMTP_USER and SMTP_PASSWORD (use app password for Gmail)."
+                "SMTP auth failed. Check SMTP_USER and SMTP_PASS."
             )
         return False
 
@@ -343,7 +343,7 @@ async def send_login_credentials_email(
             <p>If you have any questions or need assistance, please contact your administrator.</p>
             
             <p>Best regards,<br>
-            {from_name or settings.SMTP_FROM_NAME}</p>
+            {from_name or (settings.SMTP_FROM_NAME or "Navedhana")}</p>
         </div>
         <div class="footer">
             <p>This is an automated email. Please do not reply to this message.</p>

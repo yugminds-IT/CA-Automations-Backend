@@ -5,7 +5,7 @@ If **emails are not sending in production** (but work locally), use this checkli
 ## Why it works locally but not in production
 
 - **Local:** The app reads SMTP settings from your `.env` file. All vars are present.
-- **Production:** The app reads settings from the **deployment platform’s environment** (Coolify, Render, Railway, etc.). The `.env` file is usually **not** deployed (e.g. it’s in `.gitignore`), so if you never set `SMTP_HOST`, `SMTP_PASSWORD`, etc. in the platform’s UI or config, they are **missing** in prod and email is disabled.
+- **Production:** The app reads settings from the **deployment platform’s environment** (Coolify, Render, Railway, etc.). The `.env` file is usually **not** deployed (e.g. it’s in `.gitignore`), so if you never set `SMTP_FROM`, `SMTP_HOST`, `SMTP_PASS`, etc. in the platform’s UI or config, they are **missing** in prod and email is disabled.
 
 **Fix:** Set every required SMTP variable in your **deployment platform’s environment variables**, not only in `.env`.
 
@@ -20,10 +20,10 @@ If **emails are not sending in production** (but work locally), use this checkli
 or, when not configured:
 
 ```json
-{ "configured": false, "missing": ["SMTP_HOST", "SMTP_PASSWORD", ...], "hint": "Set these in your deployment platform's environment variables (e.g. Coolify, Render), not only in .env." }
+{ "configured": false, "missing": ["SMTP_FROM", "SMTP_PASS", ...], "hint": "Set these in your deployment platform's environment variables (e.g. Coolify, Render), not only in .env." }
 ```
 
-- If `configured` is `false`, set the missing env vars in your **deployment platform** (Coolify, Render, Railway, etc.) — same names as in `.env`, e.g. `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`.
+- If `configured` is `false`, set the missing env vars in your **deployment platform** (Coolify, Render, Railway, etc.) — same names as in `.env`, e.g. `SMTP_FROM`, `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`.
 
 ## 2. Required SMTP env vars
 
@@ -31,20 +31,21 @@ Set these in your **production environment** (not only in `.env` locally):
 
 | Variable | Example | Notes |
 |----------|---------|--------|
-| `SMTP_HOST` | `smtp.gmail.com` or `smtp.hostinger.com` | Your provider’s SMTP host |
-| `SMTP_PORT` | `587` or `465` | 587 = STARTTLS, 465 = SSL |
-| `SMTP_USER` | `you@example.com` | Usually your email |
-| `SMTP_PASSWORD` | app password or email password | **Gmail: use App Password, not account password** |
-| `SMTP_FROM_EMAIL` | `noreply@example.com` | Sender address |
-| `SMTP_FROM_NAME` | `Your App` | Optional |
+| `SMTP_FROM` | `ca-services@navedhana.com` | Sender email address |
+| `SMTP_HOST` | `smtp.hostinger.com` | SMTP server host |
+| `SMTP_PASS` | Your password | SMTP password |
+| `SMTP_PORT` | `465` or `587` | 465 = SSL, 587 = STARTTLS |
+| `SMTP_SECURE` | `true` or `false` | true for 465 (SSL), false for 587 |
+| `SMTP_USER` | `contact@navedhana.com` | SMTP login user |
+| `SMTP_FROM_NAME` | `Navedhana` | Optional sender name (default if not set) |
 
 ## 3. Common fixes
 
 - **Env vars in production:** Set all SMTP vars in the platform’s “Environment” / “Env vars” (not only in `.env`). Restart the app after adding them.
 - **Gmail**: Use an [App Password](https://support.google.com/accounts/answer/185833), not your normal password. `SMTP_USER` = your Gmail address.
 - **Timeouts**: Set `SMTP_TIMEOUT=60` (default 30). Try `SMTP_PORT=465` if 587 times out.
-- **Firewall**: Production host must allow **outbound** SMTP (ports 587 and/or 465). Some platforms block 587; if so, use `SMTP_PORT=465` and `SMTP_USE_TLS=false`.
-- **STARTTLS**: For port 587 use `SMTP_USE_TLS=true` (default). For 465 use `SMTP_USE_TLS=false`.
+- **Firewall**: Production host must allow **outbound** SMTP (ports 587 and/or 465). Some platforms block 587; if so, use `SMTP_PORT=465` and `SMTP_SECURE=true`.
+- **STARTTLS**: For port 587 use `SMTP_SECURE=true`. For 465 use `SMTP_SECURE=true` (SSL from start).
 
 ## 4. Logs
 

@@ -22,23 +22,23 @@ class Settings(BaseSettings):
     DB_STATEMENT_TIMEOUT: int = 60  # Statement timeout in seconds
     
     # Email settings (optional - email sending will be disabled if not configured)
-    # Hostinger SMTP settings:
+    # Use these env vars only:
+    #   SMTP_FROM=ca-services@navedhana.com
     #   SMTP_HOST=smtp.hostinger.com
-    #   SMTP_PORT=465 (SSL) or 587 (TLS/STARTTLS)
-    #   SMTP_USER=your-email@yourdomain.com
-    #   SMTP_PASSWORD=your-email-password
-    #   SMTP_FROM_EMAIL=your-email@yourdomain.com
-    #   SMTP_FROM_NAME=Your Organization Name
+    #   SMTP_PASS=your-password
+    #   SMTP_PORT=465
+    #   SMTP_SECURE=true
+    #   SMTP_USER=contact@navedhana.com
+    SMTP_FROM: Optional[str] = None  # Sender email address
     SMTP_HOST: Optional[str] = None
-    SMTP_PORT: Optional[int] = 587  # Hostinger: 587 (TLS) or 465 (SSL)
-    SMTP_USER: Optional[str] = None  # Hostinger: Your full email address
-    SMTP_PASSWORD: Optional[str] = None  # Hostinger: Your email account password
-    SMTP_FROM_EMAIL: Optional[str] = None  # Hostinger: Your email address (usually same as SMTP_USER)
-    SMTP_FROM_NAME: Optional[str] = "CAA System"
-    SMTP_USE_TLS: bool = True  # Set to True for port 587, False for port 465 (SSL)
-    SMTP_TIMEOUT: int = 30  # Connection timeout in seconds (increase if experiencing timeouts)
-    SMTP_RETRY_ATTEMPTS: int = 3  # Number of retry attempts for failed emails
-    SMTP_EMAIL_DELAY: float = 1.0  # Delay in seconds between sending multiple emails (to avoid rate limiting)
+    SMTP_PASS: Optional[str] = None  # SMTP password
+    SMTP_PORT: Optional[int] = 465  # 465 = SSL, 587 = STARTTLS
+    SMTP_SECURE: bool = True  # true for port 465 (SSL), false for 587 (STARTTLS)
+    SMTP_USER: Optional[str] = None
+    SMTP_FROM_NAME: Optional[str] = "Navedhana"  # Optional sender name (not in your env; default used)
+    SMTP_TIMEOUT: int = 30  # Connection timeout (seconds)
+    SMTP_RETRY_ATTEMPTS: int = 3  # Retries for failed emails
+    SMTP_EMAIL_DELAY: float = 1.0  # Delay between multiple emails (seconds)
     
     # Frontend URL for login links in emails
     FRONTEND_URL: Optional[str] = None

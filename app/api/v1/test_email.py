@@ -52,11 +52,11 @@ async def get_email_config(
         "smtp_host": settings.SMTP_HOST if settings.SMTP_HOST else None,
         "smtp_port": settings.SMTP_PORT,
         "smtp_user": settings.SMTP_USER if settings.SMTP_USER else None,
-        "smtp_from_email": settings.SMTP_FROM_EMAIL if settings.SMTP_FROM_EMAIL else None,
+        "smtp_from": settings.SMTP_FROM if settings.SMTP_FROM else None,
         "smtp_from_name": settings.SMTP_FROM_NAME,
-        "smtp_use_tls": settings.SMTP_USE_TLS,
+        "smtp_secure": settings.SMTP_SECURE,
         "smtp_timeout": settings.SMTP_TIMEOUT,
-        "password_set": bool(settings.SMTP_PASSWORD),
+        "password_set": bool(settings.SMTP_PASS),
     }
     
     if not config_status["configured"]:
@@ -81,7 +81,7 @@ async def send_test_email(
     Troubleshooting:
     - If you get a timeout error, try using port 465 instead of 587
     - Increase SMTP_TIMEOUT in .env if connections are slow
-    - Ensure SMTP_HOST, SMTP_USER, SMTP_PASSWORD, and SMTP_FROM_EMAIL are set
+    - Ensure SMTP_HOST, SMTP_USER, SMTP_PASS, and SMTP_FROM are set
     """
     if not is_email_configured():
         raise HTTPException(

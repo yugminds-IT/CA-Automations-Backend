@@ -29,18 +29,17 @@ async def test_send_email():
             print("  - SMTP_HOST")
         if not settings.SMTP_USER:
             print("  - SMTP_USER")
-        if not settings.SMTP_PASSWORD:
-            print("  - SMTP_PASSWORD")
-        if not settings.SMTP_FROM_EMAIL:
-            print("  - SMTP_FROM_EMAIL")
+        if not settings.SMTP_PASS:
+            print("  - SMTP_PASS")
+        if not settings.SMTP_FROM:
+            print("  - SMTP_FROM")
         print("\nPlease set these in your .env file:")
+        print("  SMTP_FROM=ca-services@navedhana.com")
         print("  SMTP_HOST=smtp.hostinger.com")
-        print("  SMTP_PORT=465  # or 587")
-        print("  SMTP_USER=your-email@yourdomain.com")
-        print("  SMTP_PASSWORD=your-password")
-        print("  SMTP_FROM_EMAIL=your-email@yourdomain.com")
-        print("  SMTP_FROM_NAME=Your Organization")
-        print("  SMTP_USE_TLS=True")
+        print("  SMTP_PASS=your-password")
+        print("  SMTP_PORT=465")
+        print("  SMTP_SECURE=true")
+        print("  SMTP_USER=contact@navedhana.com")
         print("  SMTP_TIMEOUT=60")
         return False
     
@@ -48,9 +47,9 @@ async def test_send_email():
     print(f"  SMTP Host: {settings.SMTP_HOST}")
     print(f"  SMTP Port: {settings.SMTP_PORT}")
     print(f"  SMTP User: {settings.SMTP_USER}")
-    print(f"  From Email: {settings.SMTP_FROM_EMAIL}")
+    print(f"  From Email: {settings.SMTP_FROM}")
     print(f"  From Name: {settings.SMTP_FROM_NAME}")
-    print(f"  Use TLS: {settings.SMTP_USE_TLS}")
+    print(f"  Secure: {settings.SMTP_SECURE}")
     print(f"  Timeout: {settings.SMTP_TIMEOUT}s")
     
     # Get recipient email from command line or use default
@@ -69,7 +68,7 @@ async def test_send_email():
     # Sample HTML email body (using f-string to avoid CSS brace conflicts)
     smtp_host = settings.SMTP_HOST
     smtp_port = settings.SMTP_PORT
-    from_email = settings.SMTP_FROM_EMAIL
+    from_email = settings.SMTP_FROM
     from_name = settings.SMTP_FROM_NAME
     
     html_body = f"""
