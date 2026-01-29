@@ -1,6 +1,7 @@
 """
 Test endpoint for sending test emails.
 """
+import logging
 from fastapi import APIRouter, HTTPException, status, Depends, Request
 from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional
@@ -271,6 +272,11 @@ def create_test_scheduled_email(
     db.add(scheduled_email)
     db.commit()
     db.refresh(scheduled_email)
+
+    logging.getLogger(__name__).info(
+        "[MAIL E2E] SCHEDULED (test) id=%s client_id=%s to=%s due=%s",
+        scheduled_email.id, client.id, request_body.to_email, scheduled_datetime.isoformat(),
+    )
 
     return {
         "success": True,

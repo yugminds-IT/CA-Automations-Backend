@@ -167,13 +167,15 @@ async def send_email(
         await smtp.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
         await smtp.send_message(message)
         await smtp.quit()
-        
+
+        logger.info("[MAIL E2E] SMTP_SENT to=%s subject=%s", to_email, (subject or "")[:50])
         logger.info("Email sent successfully to %s", to_email)
         return True
 
     except Exception as e:
         err = str(e)
         err_lower = err.lower()
+        logger.error("[MAIL E2E] SMTP_FAILED to=%s error=%s", to_email, err[:200])
         logger.error("Failed to send email to %s: %s", to_email, err, exc_info=True)
 
         if "timeout" in err_lower or "timed out" in err_lower:

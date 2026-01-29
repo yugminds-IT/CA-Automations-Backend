@@ -71,3 +71,26 @@ If **test email works** but **scheduled emails never send**:
 - **Logs:** On startup you should see `Email scheduler started`. Every minute the job runs; when there are pending emails you’ll see `📧 EMAIL SCHEDULER - Checking for scheduled emails` and processing logs. Check deployment logs for errors (e.g. "Error in async email sending").
 - **Multiple workers:** If you run **multiple app workers** (e.g. Gunicorn with `workers=4`), each process starts its own scheduler and the job runs in every worker. That can cause duplicate sends or odd behavior. For scheduled emails to run once per minute, either run **one worker** or use an external cron that calls a dedicated “process scheduled emails” endpoint (if you add one).
 - **Pending emails:** Scheduled emails are sent only when `scheduled_datetime <= now` and `status == 'pending'`. Confirm in the DB or via your API that there are pending rows and that `scheduled_datetime` is in the past (or now).
+
+---
+
+## 7. Prod: email sent but status shows "pending" then "cancelled"
+
+**What you see:** In production the email stays **pending** past the scheduled time, you get the mail **after some time**, then the status goes to **cancelled**.
+
+**Causes:**
+
+1. **Scheduler runs late in prod**  
+   The job runs every minute. In production (cold start, single busy worker) it can run a bit late, so the email is sent later than the exact scheduled time. That’s expected.
+
+2. **Saving email config again cancels pending**  
+   **PUT `/api/v1/client/{client_id}/email-config`** (create/update config) **cancels all pending** scheduled emails for that client, then creates new ones from the new payload. So:
+   - If the user (or the frontend) **saves the same config again** after creating it (e.g. open form and click Save again, or frontend auto-saves on load), the backend cancels the pending email and creates a new one. The old one shows **cancelled**.
+   - If the scheduler had **already sent** that email, the row is **sent** and is not touched by “cancel all pending” (only `status = 'pending'` is updated). So you should see **sent**.
+   - If the scheduler **hadn’t run yet** and the user (or frontend) saved config again, that pending row is cancelled → status **cancelled**, and a new pending row may be created.
+
+**What to do:**
+
+- **Frontend:** Do **not** call PUT email-config again without user action (e.g. don’t auto-save or re-submit the same config on page load/refresh). Only save when the user explicitly saves.
+- **Backend:** The scheduler now **re-loads** each scheduled email from the DB before sending and **skips** it if status is no longer `pending` (e.g. already cancelled by a config save). So a cancelled row is never sent, and we avoid overwriting a cancelled row with sent.
+- If you want the status to stay **sent** after the email is sent, ensure the frontend doesn’t call the “cancel single scheduled email” endpoint for that id (e.g. user didn’t click Cancel on that row).

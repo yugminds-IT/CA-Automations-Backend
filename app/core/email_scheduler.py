@@ -95,6 +95,8 @@ def process_scheduled_emails():
         
         # Only log when there are emails to process (reduce log noise)
         if len(scheduled_emails) > 0:
+            ids = [e.id for e in scheduled_emails]
+            logger.info("[MAIL E2E] SCHEDULER_RUN due_now=%s ids=%s at=%s", len(scheduled_emails), ids, current_datetime.strftime("%Y-%m-%d %H:%M:%S"))
             logger.info("="*80)
             logger.info(f"📧 EMAIL SCHEDULER - Checking for scheduled emails at {current_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
             logger.info("="*80)
@@ -149,6 +151,17 @@ def send_scheduled_email(db: Session, scheduled_email: ScheduledEmail):
         db: Database session
         scheduled_email: ScheduledEmail instance to send
     """
+    # Re-load from DB: user may have saved config (cancelling this email) before we sent
+    db.refresh(scheduled_email)
+    if scheduled_email.status != ScheduledEmailStatus.PENDING.value:
+        logger.info(
+            "[MAIL E2E] SKIPPED id=%s status=%s (no longer pending)",
+            scheduled_email.id,
+            scheduled_email.status,
+        )
+        return
+
+    logger.info("[MAIL E2E] SEND_START id=%s client_id=%s to=%s due=%s", scheduled_email.id, scheduled_email.client_id, scheduled_email.recipient_emails, scheduled_email.scheduled_datetime)
     logger.info(f"Starting email send process for scheduled email ID: {scheduled_email.id}")
     logger.info(f"Client ID: {scheduled_email.client_id}, Template ID: {scheduled_email.template_id}")
     logger.info(f"Scheduled for: {scheduled_email.scheduled_date} at {scheduled_email.scheduled_time}")
@@ -402,6 +415,7 @@ def send_scheduled_email(db: Session, scheduled_email: ScheduledEmail):
                 error_msg_combined = "; ".join(error_messages)
                 scheduled_email.error_message = error_msg_combined[:1000]  # Limit to 1000 chars
             
+            logger.info("[MAIL E2E] SENT id=%s client_id=%s to=%s sent_at=%s", scheduled_email.id, scheduled_email.client_id, scheduled_email.recipient_emails, datetime.now().isoformat())
             logger.info(f"✅ Status: SENT ({success_count}/{len(scheduled_email.recipient_emails)} successful)")
             if error_messages:
                 logger.warning(f"⚠️  Partial success - some recipients failed: {len(error_messages)} failed")
@@ -422,9 +436,10 @@ def send_scheduled_email(db: Session, scheduled_email: ScheduledEmail):
             scheduled_email.status = ScheduledEmailStatus.FAILED.value
             error_msg_combined = "; ".join(error_messages) if error_messages else "Failed to send all emails"
             scheduled_email.error_message = error_msg_combined[:1000]  # Limit to 1000 chars
+            logger.info("[MAIL E2E] FAILED id=%s client_id=%s to=%s error=%s", scheduled_email.id, scheduled_email.client_id, scheduled_email.recipient_emails, (error_msg_combined or "")[:200])
             logger.error(f"❌ FAILED: All recipients failed to receive email ({len(scheduled_email.recipient_emails)} recipients)")
             logger.error(f"   Error details: {scheduled_email.error_message}")
-        
+
         db.commit()
         logger.debug("Database commit successful")
     except Exception as commit_error:

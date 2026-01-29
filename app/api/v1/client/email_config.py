@@ -1,8 +1,10 @@
 """
 API endpoints for client email configuration and scheduling.
 """
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.orm import Session
+from app.db.models.client_email_config import ClientEmailConfig, ScheduledEmail, ScheduledEmailStatus
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy import and_, or_
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -12,13 +14,12 @@ from app.db.session import get_db
 from app.db.models.client import Client
 from app.db.models.email_template import EmailTemplate
 from app.db.models.organization import Organization
-from app.db.models.client_email_config import ClientEmailConfig, ScheduledEmail, ScheduledEmailStatus
 from app.api.v1.client.dependencies import require_admin_or_employee
 from app.core.email_template_utils import replace_template_variables
 from app.core.email_service import send_email
 
 router = APIRouter()
-
+logger = logging.getLogger(__name__)
 
 # Pydantic Schemas
 class EmailTemplateConfig(BaseModel):
@@ -429,11 +430,13 @@ def update_email_config(
     
     # Cancel all pending scheduled emails for this client (if config exists)
     if db_config:
-        db.query(ScheduledEmail).filter(
+        cancelled = db.query(ScheduledEmail).filter(
             ScheduledEmail.client_id == client_id,
             ScheduledEmail.status == ScheduledEmailStatus.PENDING.value
         ).update({"status": ScheduledEmailStatus.CANCELLED.value})
-    
+        if cancelled:
+            logger.info("[MAIL E2E] CANCELLED client_id=%s count=%s (config saved again)", client_id, cancelled)
+
     # Convert config to dict for storage (mode='json' converts dates to strings)
     config_dict = config.model_dump(mode='json')
     
@@ -452,15 +455,25 @@ def update_email_config(
     db.flush()
     
     # Create new scheduled emails
+    all_new = []
     for service_id, service_config in config.services.items():
         if service_config.enabled:
             scheduled_emails = create_scheduled_emails(
                 config, client_id, service_config.templateId, service_config, db
             )
+            all_new.extend(scheduled_emails)
             db.add_all(scheduled_emails)
-    
+
     db.commit()
     db.refresh(db_config)
+
+    if all_new:
+        first_at = min(e.scheduled_datetime for e in all_new)
+        ids = [e.id for e in all_new if getattr(e, "id", None) is not None]
+        logger.info(
+            "[MAIL E2E] SCHEDULED client_id=%s created=%s ids=%s first_at=%s",
+            client_id, len(all_new), ids or "(pending commit)", first_at.isoformat(),
+        )
     
     # Build response
     return EmailConfigResponse(
