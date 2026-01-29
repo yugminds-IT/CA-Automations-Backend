@@ -63,12 +63,20 @@ def health():
 async def startup_event():
     """Start the email scheduler on application startup. Non-fatal if it fails."""
     import logging
+    from app.core.email_service import is_email_configured, get_missing_email_config
+
+    log = logging.getLogger("uvicorn.error")
+    if is_email_configured():
+        log.info("Email configured (SMTP). Sending enabled.")
+    else:
+        log.warning(
+            "Email NOT configured. Missing: %s. Set in env for production.",
+            ", ".join(get_missing_email_config()),
+        )
     try:
         start_scheduler()
     except Exception as e:
-        logging.getLogger("uvicorn.error").warning(
-            "Email scheduler failed to start (scheduled emails disabled): %s", e
-        )
+        log.warning("Email scheduler failed to start (scheduled emails disabled): %s", e)
 
 
 @app.on_event("shutdown")

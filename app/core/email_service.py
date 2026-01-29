@@ -5,21 +5,34 @@ Supports sending login credentials to admins, employees, and clients.
 import aiosmtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Optional
+from typing import Optional, List
 import logging
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 
+def _get_missing() -> List[str]:
+    missing = []
+    if not (settings.SMTP_HOST or "").strip():
+        missing.append("SMTP_HOST")
+    if not (settings.SMTP_USER or "").strip():
+        missing.append("SMTP_USER")
+    if not (settings.SMTP_PASSWORD or "").strip():
+        missing.append("SMTP_PASSWORD")
+    if not (settings.SMTP_FROM_EMAIL or "").strip():
+        missing.append("SMTP_FROM_EMAIL")
+    return missing
+
+
 def is_email_configured() -> bool:
-    """Check if email is properly configured"""
-    return all([
-        settings.SMTP_HOST,
-        settings.SMTP_USER,
-        settings.SMTP_PASSWORD,
-        settings.SMTP_FROM_EMAIL
-    ])
+    """Check if email is properly configured."""
+    return len(_get_missing()) == 0
+
+
+def get_missing_email_config() -> List[str]:
+    """Return list of missing SMTP env var names. Use for logging/diagnostics."""
+    return _get_missing()
 
 
 async def send_email(
@@ -43,11 +56,21 @@ async def send_email(
         True if email was sent successfully, False otherwise
     """
     if not is_email_configured():
-        logger.warning("Email not configured. Skipping email send.")
+        missing = get_missing_email_config()
+        logger.warning(
+            "Email not configured. Skipping send. Missing: %s. Set these in production env.",
+            ", ".join(missing),
+        )
         return False
-    
+
     try:
-        logger.debug(f"Preparing email to {to_email} with subject: {subject[:50]}...")
+        logger.info(
+            "Attempting to send email to %s via %s:%s (subject: %s...)",
+            to_email,
+            settings.SMTP_HOST,
+            settings.SMTP_PORT,
+            (subject or "")[:50],
+        )
         
         # Use provided from_name or fall back to settings
         sender_name = from_name or settings.SMTP_FROM_NAME
@@ -97,7 +120,7 @@ async def send_email(
                     timeout=smtp_timeout,
                 )
                 await smtp.connect()
-                logger.debug(f"Connected to {settings.SMTP_HOST}:{settings.SMTP_PORT} using SSL")
+                logger.info("SMTP connected to %s:%s (SSL)", settings.SMTP_HOST, settings.SMTP_PORT)
             except Exception as e:
                 error_msg = str(e).lower()
                 if "timeout" in error_msg or "timed out" in error_msg:
@@ -111,7 +134,7 @@ async def send_email(
                     await smtp.connect()
                     if settings.SMTP_USE_TLS:
                         await smtp.starttls()
-                    logger.debug(f"Connected to {settings.SMTP_HOST}:587 using STARTTLS (fallback)")
+                    logger.info("SMTP connected to %s:587 STARTTLS (fallback from 465)", settings.SMTP_HOST)
                 else:
                     raise
         else:
@@ -129,49 +152,38 @@ async def send_email(
                 try:
                     await smtp.starttls()
                 except Exception as tls_error:
-                    error_msg = str(tls_error).lower()
-                    # If already using TLS, that's fine - continue
-                    if "already" in error_msg and "tls" in error_msg:
-                        logger.debug("Connection already using TLS, continuing...")
+                    em = str(tls_error).lower()
+                    if "already" in em and "tls" in em:
+                        logger.info("SMTP already using TLS, continuing")
                     else:
-                        # Re-raise if it's a different error
                         raise
         
-        logger.debug(f"Authenticating with SMTP server...")
         await smtp.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-        logger.debug(f"Authentication successful, sending message...")
         await smtp.send_message(message)
         await smtp.quit()
         
-        logger.info(f"Email sent successfully to {to_email}")
+        logger.info("Email sent successfully to %s", to_email)
         return True
-        
+
     except Exception as e:
-        error_msg = str(e).lower()
-        logger.error(f"Failed to send email to {to_email}: {str(e)}", exc_info=True)
-        
-        # Provide helpful error messages for common issues
-        if "timeout" in error_msg or "timed out" in error_msg:
+        err = str(e)
+        err_lower = err.lower()
+        logger.error("Failed to send email to %s: %s", to_email, err, exc_info=True)
+
+        if "timeout" in err_lower or "timed out" in err_lower:
             logger.error(
-                f"SMTP connection timeout. Try: "
-                f"1) Use port 465 instead of 587 (set SMTP_PORT=465 in .env), "
-                f"2) Increase SMTP_TIMEOUT (current: {settings.SMTP_TIMEOUT}s), "
-                f"3) Check firewall/network settings"
+                "SMTP timeout. Try: SMTP_PORT=465 or increase SMTP_TIMEOUT; ensure outbound %s allowed.",
+                settings.SMTP_PORT,
             )
-        elif "connection" in error_msg or "refused" in error_msg:
+        elif "connection" in err_lower or "refused" in err_lower:
             logger.error(
-                f"SMTP connection failed. Check: "
-                f"1) SMTP_HOST is correct (current: {settings.SMTP_HOST}), "
-                f"2) SMTP_PORT is correct (current: {settings.SMTP_PORT}), "
-                f"3) Firewall allows outbound connections on port {settings.SMTP_PORT}"
+                "SMTP connection refused. Check SMTP_HOST/SMTP_PORT and firewall for outbound %s.",
+                settings.SMTP_PORT,
             )
-        elif "authentication" in error_msg or "login" in error_msg:
+        elif "authentication" in err_lower or "login" in err_lower:
             logger.error(
-                f"SMTP authentication failed. Check: "
-                f"1) SMTP_USER is correct (current: {settings.SMTP_USER}), "
-                f"2) SMTP_PASSWORD is correct"
+                "SMTP auth failed. Check SMTP_USER and SMTP_PASSWORD (use app password for Gmail)."
             )
-        
         return False
 
 

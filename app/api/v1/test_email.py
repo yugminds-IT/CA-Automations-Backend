@@ -3,11 +3,21 @@ Test endpoint for sending test emails.
 """
 from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel, EmailStr
-from app.core.email_service import send_email, is_email_configured
+from app.core.email_service import send_email, is_email_configured, get_missing_email_config
 from app.core.config import settings
 from app.api.v1.client.dependencies import require_admin_or_employee
 
 router = APIRouter()
+
+
+@router.get("/email-status")
+async def email_status():
+    """
+    Lightweight email config status for production debugging. No auth.
+    Returns configured vs missing SMTP vars only.
+    """
+    missing = get_missing_email_config()
+    return {"configured": is_email_configured(), "missing": missing}
 
 
 class TestEmailRequest(BaseModel):
@@ -38,16 +48,7 @@ async def get_email_config(
     }
     
     if not config_status["configured"]:
-        missing = []
-        if not settings.SMTP_HOST:
-            missing.append("SMTP_HOST")
-        if not settings.SMTP_USER:
-            missing.append("SMTP_USER")
-        if not settings.SMTP_PASSWORD:
-            missing.append("SMTP_PASSWORD")
-        if not settings.SMTP_FROM_EMAIL:
-            missing.append("SMTP_FROM_EMAIL")
-        
+        missing = get_missing_email_config()
         config_status["missing_settings"] = missing
         config_status["message"] = f"Email not configured. Missing: {', '.join(missing)}"
     else:
