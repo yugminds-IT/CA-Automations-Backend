@@ -58,7 +58,7 @@ async def send_email(
     if not is_email_configured():
         missing = get_missing_email_config()
         logger.warning(
-            "Email not configured. Skipping send. Missing: %s. Set these in production env.",
+            "Email not configured. Skipping send. Missing: %s. Set these in your deployment platform's env (e.g. Coolify, Render), not only in .env.",
             ", ".join(missing),
         )
         return False
@@ -148,9 +148,15 @@ async def send_email(
             
             # For port 587, use STARTTLS to upgrade plain connection to TLS
             if settings.SMTP_USE_TLS:
-                # starttls() will raise an error if already using TLS - catch and continue
+                # In production, use relaxed SSL context to avoid cert verification failures
+                # (e.g. minimal CA bundle in Docker, different trust store)
+                starttls_context = None
+                if getattr(settings, "ENVIRONMENT", "").lower() == "production":
+                    starttls_context = ssl.create_default_context()
+                    starttls_context.check_hostname = False
+                    starttls_context.verify_mode = ssl.CERT_NONE
                 try:
-                    await smtp.starttls()
+                    await smtp.starttls(tls_context=starttls_context)
                 except Exception as tls_error:
                     em = str(tls_error).lower()
                     if "already" in em and "tls" in em:

@@ -377,19 +377,13 @@ def send_scheduled_email(db: Session, scheduled_email: ScheduledEmail):
                 logger.error(error_message)
                 error_messages.append(error_message)
     
-    # Run async function
+    # Run async function from sync scheduler thread.
+    # Use asyncio.run() so we always use a fresh event loop in this thread;
+    # get_event_loop() + run_until_complete() can fail when the main thread's
+    # loop is already running (e.g. uvicorn), causing scheduled emails to never send.
     try:
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_closed():
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        
         logger.info("Starting async email send process...")
-        loop.run_until_complete(send_all_emails())
+        asyncio.run(send_all_emails())
         logger.info(f"Async email send process completed. Success: {success_count}/{len(scheduled_email.recipient_emails)}")
     except Exception as e:
         error_msg = f"Error in async email sending: {str(e)}"

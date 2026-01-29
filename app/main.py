@@ -70,7 +70,7 @@ async def startup_event():
         log.info("Email configured (SMTP). Sending enabled.")
     else:
         log.warning(
-            "Email NOT configured. Missing: %s. Set in env for production.",
+            "Email NOT configured. Missing: %s. Set these in your deployment platform's environment variables (not only in .env).",
             ", ".join(get_missing_email_config()),
         )
     try:
