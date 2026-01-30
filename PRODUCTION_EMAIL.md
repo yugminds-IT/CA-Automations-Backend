@@ -25,6 +25,8 @@ or, when not configured:
 
 - If `configured` is `false`, set the missing env vars in your **deployment platform** (Coolify, Render, Railway, etc.) — same names as in `.env`, e.g. `SMTP_FROM`, `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`.
 
+**Coolify:** Project → backend service → **Environment Variables** → add `SMTP_FROM`, `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, `SMTP_PORT` (e.g. `465`), then **Redeploy**.
+
 ## 2. Required SMTP env vars
 
 Set these in your **production environment** (not only in `.env` locally):

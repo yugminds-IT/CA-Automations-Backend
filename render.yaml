@@ -18,4 +18,15 @@ services:
         value: 30
       - key: REFRESH_TOKEN_EXPIRE_DAYS
         value: 7
+      # Email: set these in Render dashboard (Environment) so emails work in production
+      - key: SMTP_FROM
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_PORT
+        value: "465"
+      - key: SMTP_USER
+        sync: false
 
