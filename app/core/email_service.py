@@ -1,12 +1,12 @@
 """
 Email service for sending emails to users.
+Uses fastapi-mail for SMTP delivery.
 Supports sending login credentials to admins, employees, and clients.
 """
-import aiosmtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from typing import Optional, List
 import logging
+from typing import Optional, List
+
+from fastapi_mail import FastMail, ConnectionConfig, MessageSchema
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -35,6 +35,25 @@ def get_missing_email_config() -> List[str]:
     return _get_missing()
 
 
+def _get_mail_config() -> ConnectionConfig:
+    """Build fastapi-mail ConnectionConfig from app settings."""
+    use_ssl = (settings.SMTP_PORT or 465) == 465
+    mail_from = (settings.SMTP_FROM or "").strip() or (settings.SMTP_USER or "")
+    return ConnectionConfig(
+        MAIL_USERNAME=settings.SMTP_USER or "",
+        MAIL_PASSWORD=settings.SMTP_PASS or "",
+        MAIL_FROM=mail_from,
+        MAIL_PORT=settings.SMTP_PORT or 465,
+        MAIL_SERVER=(settings.SMTP_HOST or "").strip(),
+        MAIL_FROM_NAME=settings.SMTP_FROM_NAME or "Navedhana",
+        MAIL_STARTTLS=not use_ssl and bool(settings.SMTP_SECURE),
+        MAIL_SSL_TLS=use_ssl,
+        USE_CREDENTIALS=True,
+        VALIDATE_CERTS=False,
+        TIMEOUT=getattr(settings, "SMTP_TIMEOUT", 30),
+    )
+
+
 async def send_email(
     to_email: str,
     subject: str,
@@ -43,15 +62,15 @@ async def send_email(
     from_name: Optional[str] = None
 ) -> bool:
     """
-    Send an email using SMTP.
-    
+    Send an email using fastapi-mail (SMTP).
+
     Args:
         to_email: Recipient email address
         subject: Email subject
         html_body: HTML email body
-        plain_body: Plain text email body (optional, auto-generated from HTML if not provided)
-        from_name: Sender name (optional, defaults to SMTP_FROM_NAME from settings)
-    
+        plain_body: Plain text email body (optional; fastapi-mail sends HTML when subtype='html')
+        from_name: Sender name (optional; MAIL_FROM_NAME from config is used by FastMail)
+
     Returns:
         True if email was sent successfully, False otherwise
     """
@@ -71,102 +90,16 @@ async def send_email(
             settings.SMTP_PORT,
             (subject or "")[:50],
         )
-        
-        # Use provided from_name or fall back to settings
-        sender_name = from_name or settings.SMTP_FROM_NAME
-        
-        # Create message
-        message = MIMEMultipart("alternative")
-        message["Subject"] = subject
-        message["From"] = f"{sender_name} <{settings.SMTP_FROM}>"
-        message["To"] = to_email
-        
-        # Create plain text version if not provided
-        if not plain_body:
-            # Simple HTML to text conversion (remove tags)
-            import re
-            plain_body = re.sub(r'<[^>]+>', '', html_body)
-            plain_body = plain_body.replace('&nbsp;', ' ').strip()
-        
-        # Add both plain and HTML versions
-        part1 = MIMEText(plain_body, "plain")
-        part2 = MIMEText(html_body, "html")
-        
-        message.attach(part1)
-        message.attach(part2)
-        
-        # Send email using aiosmtplib with explicit STARTTLS handling
-        # Hostinger/Gmail port 587 requires STARTTLS (plain connection, then upgrade to TLS)
-        # Hostinger/Gmail port 465 requires SSL from the start
-        # Use configurable timeout (default 30 seconds, increase if experiencing timeouts)
-        smtp_timeout = settings.SMTP_TIMEOUT
-        import ssl
-        
-        # Try to connect based on port
-        if settings.SMTP_PORT == 465:
-            # Port 465: SSL/TLS from the start (SMTPS)
-            # Create SSL context with relaxed settings for some SMTP servers
-            context = ssl.create_default_context()
-            # Some SMTP servers need these settings
-            context.check_hostname = False
-            context.verify_mode = ssl.CERT_NONE
-            
-            try:
-                smtp = aiosmtplib.SMTP(
-                    hostname=settings.SMTP_HOST,
-                    port=settings.SMTP_PORT,
-                    use_tls=True,
-                    tls_context=context,
-                    timeout=smtp_timeout,
-                )
-                await smtp.connect()
-                logger.info("SMTP connected to %s:%s (SSL)", settings.SMTP_HOST, settings.SMTP_PORT)
-            except Exception as e:
-                error_msg = str(e).lower()
-                if "timeout" in error_msg or "timed out" in error_msg:
-                    logger.warning(f"Port 465 connection timed out. Trying port 587 as fallback...")
-                    # Fallback to port 587
-                    smtp = aiosmtplib.SMTP(
-                        hostname=settings.SMTP_HOST,
-                        port=587,
-                        timeout=smtp_timeout,
-                    )
-                    await smtp.connect()
-                    if settings.SMTP_SECURE:
-                        await smtp.starttls()
-                    logger.info("SMTP connected to %s:587 STARTTLS (fallback from 465)", settings.SMTP_HOST)
-                else:
-                    raise
-        else:
-            # Port 587: Plain connection first, then STARTTLS
-            smtp = aiosmtplib.SMTP(
-                hostname=settings.SMTP_HOST,
-                port=settings.SMTP_PORT,
-                timeout=smtp_timeout,
-            )
-            await smtp.connect()
-            
-            # For port 587, use STARTTLS to upgrade plain connection to TLS
-            if settings.SMTP_SECURE:
-                # In production, use relaxed SSL context to avoid cert verification failures
-                # (e.g. minimal CA bundle in Docker, different trust store)
-                starttls_context = None
-                if getattr(settings, "ENVIRONMENT", "").lower() == "production":
-                    starttls_context = ssl.create_default_context()
-                    starttls_context.check_hostname = False
-                    starttls_context.verify_mode = ssl.CERT_NONE
-                try:
-                    await smtp.starttls(tls_context=starttls_context)
-                except Exception as tls_error:
-                    em = str(tls_error).lower()
-                    if "already" in em and "tls" in em:
-                        logger.info("SMTP already using TLS, continuing")
-                    else:
-                        raise
-        
-        await smtp.login(settings.SMTP_USER, settings.SMTP_PASS)
-        await smtp.send_message(message)
-        await smtp.quit()
+
+        conf = _get_mail_config()
+        message = MessageSchema(
+            subject=subject,
+            recipients=[to_email],
+            body=html_body,
+            subtype="html",
+        )
+        fm = FastMail(conf)
+        await fm.send_message(message)
 
         logger.info("[MAIL E2E] SMTP_SENT to=%s subject=%s", to_email, (subject or "")[:50])
         logger.info("Email sent successfully to %s", to_email)
@@ -206,7 +139,7 @@ async def send_login_credentials_email(
 ) -> bool:
     """
     Send login credentials email to a user.
-    
+
     Args:
         recipient_email: Email address to send to
         recipient_name: Name of the recipient
@@ -215,11 +148,10 @@ async def send_login_credentials_email(
         role: User role (admin, employee, client)
         organization_name: Optional organization name
         from_name: Sender name (optional, defaults to SMTP_FROM_NAME from settings)
-    
+
     Returns:
         True if email was sent successfully, False otherwise
     """
-    # Determine role-specific messaging
     role_messages = {
         "admin": {
             "title": "Welcome! Your Admin Account Has Been Created",
@@ -234,13 +166,12 @@ async def send_login_credentials_email(
             "description": "Your client portal account has been created. You can now access your account information."
         }
     }
-    
+
     role_info = role_messages.get(role.lower(), {
         "title": "Welcome! Your Account Has Been Created",
         "description": "Your account has been created. You can now access the system."
     })
-    
-    # Build HTML email body
+
     html_body = f"""
     <!DOCTYPE html>
     <html>
@@ -314,13 +245,12 @@ async def send_login_credentials_email(
         </div>
         <div class="content">
             <p>Dear {recipient_name},</p>
-            
             <p>{role_info['description']}</p>
     """
-    
+
     if organization_name:
         html_body += f'<p><strong>Organization:</strong> {organization_name}</p>'
-    
+
     html_body += f"""
             <div class="credentials">
                 <h3 style="margin-top: 0;">Your Login Credentials:</h3>
@@ -333,15 +263,11 @@ async def send_login_credentials_email(
                     <span class="value">{password}</span>
                 </div>
             </div>
-            
             <div class="warning">
                 <strong>⚠️ Security Notice:</strong> Please change your password after your first login for security purposes.
             </div>
-            
             <p>You can now log in to the system using the credentials above.</p>
-            
             <p>If you have any questions or need assistance, please contact your administrator.</p>
-            
             <p>Best regards,<br>
             {from_name or (settings.SMTP_FROM_NAME or "Navedhana")}</p>
         </div>
@@ -351,16 +277,11 @@ async def send_login_credentials_email(
     </body>
     </html>
     """
-    
+
     subject = role_info['title']
-    
     return await send_email(
         to_email=recipient_email,
         subject=subject,
         html_body=html_body,
         from_name=from_name
     )
-
-
-
-

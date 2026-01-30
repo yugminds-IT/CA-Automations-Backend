@@ -10,7 +10,7 @@ psycopg[binary]
 python-multipart
 email-validator
 openpyxl
-aiosmtplib
+fastapi-mail
 apscheduler
 cryptography
 boto3
